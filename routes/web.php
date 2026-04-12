@@ -2,7 +2,10 @@
 
 declare(strict_types=1);
 
+use App\Data\Sau\PrssLoginR01Dto;
+use App\Data\Sau\PrssLoginR01ResultDto;
 use App\Http\Controllers\SessionController;
+use App\Http\Controllers\SybasePingController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\UserEmailResetNotificationController;
 use App\Http\Controllers\UserEmailVerificationController;
@@ -10,8 +13,47 @@ use App\Http\Controllers\UserEmailVerificationNotificationController;
 use App\Http\Controllers\UserPasswordController;
 use App\Http\Controllers\UserProfileController;
 use App\Http\Controllers\UserTwoFactorAuthenticationController;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
+
+Route::get('/__sybase-ping', function () {
+
+    // $resultset = DB::connection('sau')->select(
+    //     'prss_login_r01 @cd_pessoa_p = ?, @tp_cd_pessoa = ?, @senha = ?',
+    //     config('sau.prss_login', []),
+    // );
+    // return response()->json($resultset, 200, [], JSON_UNESCAPED_UNICODE);
+
+    // // Teste simples de select no Sybase para verificar se está funcionando
+    // $resultset = DB::connection('sau')
+    //     ->select('select 1 as teste');
+    // return response()->json($resultset, 200, [], JSON_UNESCAPED_UNICODE);
+
+    // Get credentials from config
+    ['credentialId' => $credentialId, 'credentialType' => $credentialType, 'password' => $password] = config('sau.prss_login', []);
+
+    // Create credentials object
+    $credentials = new PrssLoginR01Dto(
+        credentialId: (string) $credentialId,
+        credentialType: (string) $credentialType,
+        password: (string) $password,
+    );
+
+    /** @var Collection<int, PrssLoginR01ResultDto> $resultset */
+    $resultset = DB::connection('sau')
+        ->rpc('prss_login_r01')
+        ->with($credentials)
+        ->throwOnError()
+        ->getAs(PrssLoginR01ResultDto::class);
+
+    // var_dump($resultset[0]);
+    return response()->json($resultset, 200, [], JSON_UNESCAPED_UNICODE);
+
+})->name('debug.sybase-ping');
+
+Route::get('/sybase', SybasePingController::class)->name('debug.sybase');
 
 Route::get('/', fn () => Inertia::render('welcome'))->name('home');
 
