@@ -4,9 +4,9 @@
   "workspaces": {
     "": {
       "dependencies": {
-        "@headlessui/react": "^2.2.9",
-        "@inertiajs/react": "^3.0.1",
-        "@inertiajs/vite": "^3.0.1",
+        "@headlessui/react": "^2.2.10",
+        "@inertiajs/react": "^3.0.3",
+        "@inertiajs/vite": "^3.0.3",
         "@radix-ui/react-avatar": "^1.1.11",
         "@radix-ui/react-checkbox": "^1.3.3",
         "@radix-ui/react-collapsible": "^1.1.12",
@@ -30,9 +30,10 @@
         "concurrently": "^9.2.1",
         "input-otp": "^1.4.2",
         "laravel-vite-plugin": "^3.0.1",
-        "lucide-react": "^1.7.0",
-        "react": "^19.2.4",
-        "react-dom": "^19.2.4",
+        "lucide-react": "^1.8.0",
+        "react": "^19.2.5",
+        "react-dom": "^19.2.5",
+        "sonner": "^2.0.7",
         "tailwind-merge": "^3.5.0",
         "tailwindcss": "^4.2.2",
         "tailwindcss-animate": "^1.0.7",
@@ -40,8 +41,8 @@
       },
       "devDependencies": {
         "@laravel/vite-plugin-wayfinder": "^0.1.7",
-        "@types/node": "^25.5.0",
-        "npm-check-updates": "^20.0.0",
+        "@types/node": "^25.6.0",
+        "npm-check-updates": "^20.0.1",
         "playwright": "^1.59.1",
         "tw-animate-css": "^1.4.0",
         "vite": "npm:@voidzero-dev/vite-plus-core@latest",
@@ -492,6 +493,8 @@
     "shell-quote": ["shell-quote@1.8.3", "", {}, "sha512-ObmnIF4hXNg1BqhnHmgbDETF8dLPCggZWBjkQfhZpbszZnYur5DUljTcCHii5LC3J5E0yeO/1LIMyH+UvHQgyw=="],
 
     "sirv": ["sirv@3.0.2", "", { "dependencies": { "@polka/url": "^1.0.0-next.24", "mrmime": "^2.0.0", "totalist": "^3.0.0" } }, "sha512-2wcC/oGxHis/BoHkkPwldgiPSYcpZK3JU28WoMVv55yHJgcZ8rlXvuG9iZggz+sU1d4bRgIGASwyWqjxu3FM0g=="],
+
+    "sonner": ["sonner@2.0.7", "", { "peerDependencies": { "react": "^18.0.0 || ^19.0.0 || ^19.0.0-rc", "react-dom": "^18.0.0 || ^19.0.0 || ^19.0.0-rc" } }, "sha512-W6ZN4p58k8aDKA4XPcx2hpIQXBRAgyiWVkYhT7CvK6D3iAu7xjvVyhQHg2/iaKJZ1XVJ4r7XuwGL+WGEK37i9w=="],
 
     "source-map-js": ["source-map-js@1.2.1", "", {}, "sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA=="],
 
