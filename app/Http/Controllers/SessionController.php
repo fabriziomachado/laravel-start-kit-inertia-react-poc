@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Data\Sau\PrssLoginR01Dto;
+use App\Data\Sau\PrssLoginR01ResultDto;
 use App\Http\Requests\CreateSessionRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -24,6 +27,25 @@ final readonly class SessionController
 
     public function store(CreateSessionRequest $request): RedirectResponse
     {
+        
+        ['email' => $email, 'password' => $password] = $request->safe()->only('email', 'password');
+        
+        // Create credentials object
+        $credentials = new PrssLoginR01Dto(
+            credentialId: (string) $email,
+            credentialType: (string) $credentialType,
+            password: (string) $password,
+        );
+
+   
+        $resultset = DB::connection('sau')
+            ->rpc('prss_login_r01')
+            ->with($credentials)
+            ->throwOnError()
+            ->getAs(PrssLoginR01ResultDto::class);
+        
+       
+
         $user = $request->validateCredentials();
 
         if ($user->hasEnabledTwoFactorAuthentication()) {
