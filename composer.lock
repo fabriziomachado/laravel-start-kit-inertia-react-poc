@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "c7b562851a32b9c183e2a93a06c10a92",
+    "content-hash": "d4eb6ec29f1c38dcd3b0937ea8793204",
     "packages": [
         {
             "name": "bacon/bacon-qr-code",
@@ -5526,12 +5526,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/symfony/process.git",
-                "reference": "16e6281e9ebcf207c25500d4af7b2806a254eb1e"
+                "reference": "6399ddd9cc1ceb7408af0f43468ec3b6785b55f4"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/symfony/process/zipball/16e6281e9ebcf207c25500d4af7b2806a254eb1e",
-                "reference": "16e6281e9ebcf207c25500d4af7b2806a254eb1e",
+                "url": "https://api.github.com/repos/symfony/process/zipball/6399ddd9cc1ceb7408af0f43468ec3b6785b55f4",
+                "reference": "6399ddd9cc1ceb7408af0f43468ec3b6785b55f4",
                 "shasum": ""
             },
             "require": {
@@ -5584,7 +5584,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-04-07T06:26:27+00:00"
+            "time": "2026-04-13T15:52:40+00:00"
         },
         {
             "name": "symfony/routing",
@@ -8561,16 +8561,16 @@
         },
         {
             "name": "larastan/larastan",
-            "version": "v3.9.3",
+            "version": "v3.9.5",
             "source": {
                 "type": "git",
                 "url": "https://github.com/larastan/larastan.git",
-                "reference": "64a52bcc5347c89fdf131cb59f96ebfbc8d1ad65"
+                "reference": "aa637ef3c9102490e0fa9a7ea4fbdbbce4471f34"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/larastan/larastan/zipball/64a52bcc5347c89fdf131cb59f96ebfbc8d1ad65",
-                "reference": "64a52bcc5347c89fdf131cb59f96ebfbc8d1ad65",
+                "url": "https://api.github.com/repos/larastan/larastan/zipball/aa637ef3c9102490e0fa9a7ea4fbdbbce4471f34",
+                "reference": "aa637ef3c9102490e0fa9a7ea4fbdbbce4471f34",
                 "shasum": ""
             },
             "require": {
@@ -8584,7 +8584,7 @@
                 "illuminate/pipeline": "^11.44.2 || ^12.4.1 || ^13",
                 "illuminate/support": "^11.44.2 || ^12.4.1 || ^13",
                 "php": "^8.2",
-                "phpstan/phpstan": "^2.1.32"
+                "phpstan/phpstan": "^2.1.44"
             },
             "require-dev": {
                 "doctrine/coding-standard": "^13",
@@ -8639,7 +8639,7 @@
             ],
             "support": {
                 "issues": "https://github.com/larastan/larastan/issues",
-                "source": "https://github.com/larastan/larastan/tree/v3.9.3"
+                "source": "https://github.com/larastan/larastan/tree/v3.9.5"
             },
             "funding": [
                 {
@@ -8647,7 +8647,7 @@
                     "type": "github"
                 }
             ],
-            "time": "2026-02-20T12:07:12+00:00"
+            "time": "2026-04-11T20:10:30+00:00"
         },
         {
             "name": "laravel/boost",
@@ -10768,11 +10768,11 @@
         },
         {
             "name": "phpstan/phpstan",
-            "version": "2.1.46",
+            "version": "2.1.47",
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/phpstan/phpstan/zipball/a193923fc2d6325ef4e741cf3af8c3e8f54dbf25",
-                "reference": "a193923fc2d6325ef4e741cf3af8c3e8f54dbf25",
+                "url": "https://api.github.com/repos/phpstan/phpstan/zipball/79015445d8bd79e62b29140f12e5bfced1dcca65",
+                "reference": "79015445d8bd79e62b29140f12e5bfced1dcca65",
                 "shasum": ""
             },
             "require": {
@@ -10817,20 +10817,20 @@
                     "type": "github"
                 }
             ],
-            "time": "2026-04-01T09:25:14+00:00"
+            "time": "2026-04-13T15:49:08+00:00"
         },
         {
             "name": "phpunit/php-code-coverage",
-            "version": "14.1.0",
+            "version": "14.1.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/sebastianbergmann/php-code-coverage.git",
-                "reference": "a9a9019d28e62c13609b3f0590202ea73264e0e7"
+                "reference": "c875dc3bc9551710bda98938e3557c6987307831"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sebastianbergmann/php-code-coverage/zipball/a9a9019d28e62c13609b3f0590202ea73264e0e7",
-                "reference": "a9a9019d28e62c13609b3f0590202ea73264e0e7",
+                "url": "https://api.github.com/repos/sebastianbergmann/php-code-coverage/zipball/c875dc3bc9551710bda98938e3557c6987307831",
+                "reference": "c875dc3bc9551710bda98938e3557c6987307831",
                 "shasum": ""
             },
             "require": {
@@ -10886,7 +10886,7 @@
             "support": {
                 "issues": "https://github.com/sebastianbergmann/php-code-coverage/issues",
                 "security": "https://github.com/sebastianbergmann/php-code-coverage/security/policy",
-                "source": "https://github.com/sebastianbergmann/php-code-coverage/tree/14.1.0"
+                "source": "https://github.com/sebastianbergmann/php-code-coverage/tree/14.1.1"
             },
             "funding": [
                 {
@@ -10906,7 +10906,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-04-12T05:08:24+00:00"
+            "time": "2026-04-13T04:55:38+00:00"
         },
         {
             "name": "phpunit/php-file-iterator",
@@ -14007,22 +14007,24 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/fabriziomachado/laravel-sybase.git",
-                "reference": "b20c9eecf5c96afa671ac4fe6d131042db4544fd"
+                "reference": "057e484e6e05c74ea1547a01fd6ee0f75f35c622"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/fabriziomachado/laravel-sybase/zipball/b20c9eecf5c96afa671ac4fe6d131042db4544fd",
-                "reference": "b20c9eecf5c96afa671ac4fe6d131042db4544fd",
+                "url": "https://api.github.com/repos/fabriziomachado/laravel-sybase/zipball/057e484e6e05c74ea1547a01fd6ee0f75f35c622",
+                "reference": "057e484e6e05c74ea1547a01fd6ee0f75f35c622",
                 "shasum": ""
             },
             "require": {
                 "doctrine/dbal": "^3.5.1",
                 "ext-pdo": "*",
+                "illuminate/database": "^13",
+                "illuminate/support": "^13",
                 "php": "^8.3"
             },
             "require-dev": {
                 "laravel/framework": "^13.0",
-                "nunomaduro/collision": "^8.0|^9.0|^10.0",
+                "nunomaduro/collision": "^8.9",
                 "orchestra/testbench": "^11.0"
             },
             "default-branch": true,
@@ -14065,7 +14067,7 @@
                     "email": "matheusbartkev@gmail.com"
                 }
             ],
-            "description": "Sybase based Eloquent module extension for Laravel",
+            "description": "Sybase based Eloquent module extension for Laravel 13.x",
             "keywords": [
                 "sybase"
             ],
@@ -14074,7 +14076,7 @@
                 "wiki": "https://github.com/uepg/laravel-sybase/wiki",
                 "source": "https://github.com/fabriziomachado/laravel-sybase/tree/master"
             },
-            "time": "2026-04-12T22:40:52+00:00"
+            "time": "2026-04-13T11:14:54+00:00"
         },
         {
             "name": "webmozart/assert",
