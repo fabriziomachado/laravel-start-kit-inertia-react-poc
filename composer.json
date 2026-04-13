@@ -12,6 +12,13 @@
         {
             "type": "vcs",
             "url": "https://github.com/fabriziomachado/laravel-sybase.git"
+        },
+        {
+            "type": "path",
+            "url": "./packages/benbjurstrom-otpz",
+            "options": {
+                "symlink": true
+            }
         }
     ],
     "require": {
@@ -20,6 +27,7 @@
         "laravel/fortify": "^1.36.2",
         "laravel/framework": "^13.4.0",
         "laravel/wayfinder": "^0.1.16",
+        "benbjurstrom/otpz": "*",
         "nunomaduro/essentials": "^1.2.0"
     },
     "require-dev": {
