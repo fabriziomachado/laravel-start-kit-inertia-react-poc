@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import AuthLayout from '@/layouts/auth-layout';
 import { register } from '@/routes';
+import { index as otpzIndex } from '@/routes/otpz';
 import { store } from '@/routes/login';
 import { request } from '@/routes/password';
 
@@ -96,6 +97,12 @@ export default function Login({
                                 {processing && <Spinner />}
                                 Log in
                             </Button>
+
+                            <div className="text-center text-sm text-muted-foreground">
+                                <TextLink href={otpzIndex()} tabIndex={6}>
+                                    Entrar com código por email
+                                </TextLink>
+                            </div>
                         </div>
 
                         {canRegister && (
