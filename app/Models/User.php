@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use BenBjurstrom\Otpz\Models\Concerns\HasOtps;
+use BenBjurstrom\Otpz\Models\Concerns\Otpable;
 use Carbon\CarbonInterface;
 use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
@@ -33,11 +35,12 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
     'two_factor_secret',
     'two_factor_recovery_codes',
 ])]
-final class User extends Authenticatable implements MustVerifyEmail
+final class User extends Authenticatable implements MustVerifyEmail, Otpable
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory;
 
+    use HasOtps;
     use HasUuids;
     use Notifiable;
     use TwoFactorAuthenticatable;

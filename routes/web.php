@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Data\Sau\PrssLoginR01Dto;
 use App\Data\Sau\PrssLoginR01ResultDto;
+use App\Http\Controllers\Auth\OtpzController;
 use App\Http\Controllers\SessionController;
 use App\Http\Controllers\SybasePingController;
 use App\Http\Controllers\UserController;
@@ -108,6 +109,11 @@ Route::middleware('guest')->group(function (): void {
         ->name('login');
     Route::post('login', [SessionController::class, 'store'])
         ->name('login.store');
+
+    Route::get('otpz', [OtpzController::class, 'index'])->name('otpz.index');
+    Route::post('otpz', [OtpzController::class, 'store'])->name('otpz.store');
+    Route::get('otpz/{id}', [OtpzController::class, 'show'])->name('otpz.show')->middleware('signed');
+    Route::post('otpz/{id}', [OtpzController::class, 'verify'])->name('otpz.verify')->middleware('signed');
 });
 
 Route::middleware('auth')->group(function (): void {
