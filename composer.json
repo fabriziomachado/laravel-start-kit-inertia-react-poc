@@ -20,11 +20,12 @@
     ],
     "require": {
         "php": "^8.5.0",
+        "benbjurstrom/otpz": "dev-main",
         "inertiajs/inertia-laravel": "^3.0.0-beta",
+        "lab404/laravel-impersonate": "^1.7",
         "laravel/fortify": "^1.36.2",
         "laravel/framework": "^13.4.0",
         "laravel/wayfinder": "^0.1.16",
-        "benbjurstrom/otpz": "dev-main",
         "nunomaduro/essentials": "^1.2.0"
     },
     "require-dev": {
