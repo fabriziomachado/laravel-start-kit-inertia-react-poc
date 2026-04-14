@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Lab404\Impersonate\Models\Impersonate;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 
 /**
@@ -28,6 +29,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property-read CarbonInterface|null $two_factor_confirmed_at
  * @property-read CarbonInterface $created_at
  * @property-read CarbonInterface $updated_at
+ * @property-read bool $is_admin
  */
 #[Hidden([
     'password',
@@ -42,8 +44,14 @@ final class User extends Authenticatable implements MustVerifyEmail, Otpable
 
     use HasOtps;
     use HasUuids;
+    use Impersonate;
     use Notifiable;
     use TwoFactorAuthenticatable;
+
+    public function canImpersonate(): bool
+    {
+        return $this->is_admin;
+    }
 
     /**
      * @return array<string, string>
@@ -62,6 +70,7 @@ final class User extends Authenticatable implements MustVerifyEmail, Otpable
             'two_factor_confirmed_at' => 'datetime',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
+            'is_admin' => 'boolean',
         ];
     }
 }
