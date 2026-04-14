@@ -2,10 +2,51 @@
 
 declare(strict_types=1);
 
+use App\Data\Sau\PrssLoginR01Dto;
+use App\Data\Sau\PrssLoginR01ResultDto;
 use App\Models\User;
 use Illuminate\Auth\Events\Lockout;
+use Illuminate\Database\Connection;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Hash;
+
+beforeEach(function (): void {
+    $db = $this->app->make('db');
+    $db->purge('sau');
+
+    $row = PrssLoginR01ResultDto::fromArray([
+        'cd_retorno' => 0,
+        'msg_retorno' => 'OK',
+        'cd_pessoa' => '1',
+        'nome_pessoa' => 'Test',
+        'cpf_pessoa' => null,
+        'dt_alteracao_senha' => null,
+        'dt_atualizacao_cadastro' => null,
+    ]);
+
+    $db->extend('sau', function (array $config, string $name) use ($row): Connection {
+        $rpc = Mockery::mock();
+        $rpc->shouldReceive('with')
+            ->zeroOrMoreTimes()
+            ->with(Mockery::type(PrssLoginR01Dto::class))
+            ->andReturnSelf();
+        $rpc->shouldReceive('throwOnError')->zeroOrMoreTimes()->andReturnSelf();
+        $rpc->shouldReceive('getAs')
+            ->zeroOrMoreTimes()
+            ->with(PrssLoginR01ResultDto::class)
+            ->andReturn(collect([$row]));
+
+        $connection = Mockery::mock(Connection::class)->shouldIgnoreMissing();
+        $connection->shouldReceive('setReadWriteType')->zeroOrMoreTimes()->andReturnSelf();
+        $connection->shouldReceive('rpc')->zeroOrMoreTimes()->with('prss_login_r01')->andReturn($rpc);
+
+        return $connection;
+    });
+});
+
+afterEach(function (): void {
+    $this->app->make('db')->purge('sau');
+});
 
 it('renders login page', function (): void {
     $response = $this->fromRoute('home')

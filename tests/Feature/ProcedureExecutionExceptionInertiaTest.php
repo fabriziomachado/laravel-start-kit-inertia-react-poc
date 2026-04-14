@@ -70,7 +70,6 @@ it('returns json 422 when fresh GET without inertia fallback throws procedure ex
 });
 
 it('renders same inertia component with flash when fresh html GET throws procedure exception', function (): void {
-    // O toResponse() tenta SSR via HTTP; faz fake para cair em CSR sem StrayRequestException.
     Http::fake(['*' => Http::response(null, 503)]);
 
     $this->app->bind(SybasePingController::class, fn (): object => new class implements HasInertiaFallback
@@ -91,11 +90,11 @@ it('renders same inertia component with flash when fresh html GET throws procedu
     $response->assertOk();
     $response->assertInertia(function (AssertableInertia $page): void {
         $page->component('debug/sybase-ping')
-            ->assertFlash('toast.type', 'error')
-            ->assertFlash('toast.title', 'msg_retorno_test')
-            ->assertFlash('toast.message', 'message_test')
-            ->assertFlash('toast.description', 'cd_retorno: 9')
-            ->assertFlash('toast.details.errorCode', 9)
-            ->assertFlash('toast.details.errorMessage', 'msg_retorno_test');
+            ->hasFlash('toast.type', 'error')
+            ->hasFlash('toast.title', 'msg_retorno_test')
+            ->hasFlash('toast.message', 'message_test')
+            ->hasFlash('toast.description', 'cd_retorno: 9')
+            ->hasFlash('toast.details.errorCode', 9)
+            ->hasFlash('toast.details.errorMessage', 'msg_retorno_test');
     });
 });
