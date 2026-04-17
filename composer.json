@@ -10,6 +10,13 @@
     "license": "MIT",
     "repositories": [
         {
+            "type": "path",
+            "url": "./packages/laravel-workflow-automation",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
             "type": "vcs",
             "url": "https://github.com/fabriziomachado/laravel-sybase.git"
         },
@@ -20,6 +27,7 @@
     ],
     "require": {
         "php": "^8.5.0",
+        "aftandilmmd/laravel-workflow-automation": "dev-main",
         "benbjurstrom/otpz": "dev-main",
         "inertiajs/inertia-laravel": "^3.0.0-beta",
         "lab404/laravel-impersonate": "^1.7",
