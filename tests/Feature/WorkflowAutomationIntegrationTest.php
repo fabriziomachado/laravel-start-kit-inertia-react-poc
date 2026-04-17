@@ -15,7 +15,9 @@ it('permite aceder ao editor de workflows em ambiente local', function (): void 
 
     Gate::define('viewWorkflowAutomation', fn ($user = null): bool => false);
 
-    $this->get('/workflow-editor')->assertSuccessful();
+    $this->get('/workflow-editor')
+        ->assertSuccessful()
+        ->assertSee('Workflow Editor');
 });
 
 it('permite listar workflows via API em ambiente local', function (): void {
@@ -24,4 +26,9 @@ it('permite listar workflows via API em ambiente local', function (): void {
     Gate::define('viewWorkflowAutomation', fn ($user = null): bool => false);
 
     $this->getJson('/workflow-engine/workflows')->assertOk();
+});
+
+it('carrega os pacotes Laravel AI e MCP', function (): void {
+    expect(class_exists(Laravel\Ai\AiManager::class))->toBeTrue()
+        ->and(class_exists(Laravel\Mcp\Facades\Mcp::class))->toBeTrue();
 });
