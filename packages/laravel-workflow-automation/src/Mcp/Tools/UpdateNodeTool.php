@@ -22,8 +22,8 @@ final class UpdateNodeTool extends Tool
     {
         return [
             'node_id' => $schema->integer()->required()->description('The node ID'),
-            'name' => $schema->string()->description('New display name for the node'),
-            'config' => $schema->object()->description('New configuration for the node'),
+            'name' => $schema->string()->nullable()->required()->description('New display name; use null to leave unchanged'),
+            'config' => $schema->string()->nullable()->required()->description('JSON string of the new configuration object; use null to leave unchanged'),
         ];
     }
 
@@ -38,7 +38,23 @@ final class UpdateNodeTool extends Tool
         }
 
         if ($request->get('config') !== null) {
-            $data['config'] = $request->get('config');
+            $configRaw = $request->get('config');
+
+            if (is_string($configRaw)) {
+                $decoded = json_decode($configRaw, true);
+
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    return Response::error('Invalid JSON in config: '.json_last_error_msg());
+                }
+
+                if (! is_array($decoded)) {
+                    return Response::error('Parameter config must decode to a JSON object.');
+                }
+
+                $data['config'] = $decoded;
+            } elseif (is_array($configRaw)) {
+                $data['config'] = $configRaw;
+            }
         }
 
         $node->update($data);

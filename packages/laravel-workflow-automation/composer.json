@@ -33,13 +33,13 @@
     },
     "autoload": {
         "psr-4": {
-            "Aftandilmmd\\WorkflowAutomation\\": "src/"
+            "Aftandilmmd\\WorkflowAutomation\\": "src/",
+            "Aftandilmmd\\WorkflowAutomation\\Database\\Factories\\": "database/factories/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "Aftandilmmd\\WorkflowAutomation\\Tests\\": "tests/",
-            "Aftandilmmd\\WorkflowAutomation\\Database\\Factories\\": "database/factories/"
+            "Aftandilmmd\\WorkflowAutomation\\Tests\\": "tests/"
         }
     },
     "extra": {

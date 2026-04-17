@@ -15,10 +15,10 @@ use Laravel\Mcp\Server\Tool as McpTool;
 use Stringable;
 use Throwable;
 
-final class McpToolAdapter implements AiTool
+abstract class McpToolAdapter implements AiTool
 {
     public function __construct(
-        private McpTool $mcpTool,
+        protected McpTool $mcpTool,
     ) {}
 
     public function name(): string

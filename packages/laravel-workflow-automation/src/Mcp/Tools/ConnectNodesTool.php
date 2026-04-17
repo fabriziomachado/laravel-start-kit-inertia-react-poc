@@ -27,8 +27,8 @@ final class ConnectNodesTool extends Tool
         return [
             'source_node_id' => $schema->integer()->required()->description('The source node ID'),
             'target_node_id' => $schema->integer()->required()->description('The target node ID'),
-            'source_port' => $schema->string()->description('Source output port name')->default('main'),
-            'target_port' => $schema->string()->description('Target input port name')->default('main'),
+            'source_port' => $schema->string()->required()->description('Source output port; use "main" unless branching (true/false/case_N).'),
+            'target_port' => $schema->string()->required()->description('Target input port; use "main" unless merging multiple inputs.'),
         ];
     }
 

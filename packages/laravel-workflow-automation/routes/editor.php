@@ -15,7 +15,12 @@ $spaHandler = function () {
         abort(404, 'Workflow UI not built. Run: cd vendor/aftandilmmd/laravel-workflow-automation/ui && npm install && npm run build');
     }
 
-    return response()->file($path, ['Content-Type' => 'text/html']);
+    $contents = file_get_contents($path);
+    if ($contents === false) {
+        abort(500, 'Failed to read workflow editor index.');
+    }
+
+    return response($contents, 200, ['Content-Type' => 'text/html']);
 };
 
 $assetHandler = function (string $file) {
@@ -39,7 +44,12 @@ $assetHandler = function (string $file) {
         default => 'application/octet-stream',
     };
 
-    return response()->file($path, ['Content-Type' => $mime]);
+    $contents = file_get_contents($path);
+    if ($contents === false) {
+        abort(500, 'Failed to read workflow editor asset.');
+    }
+
+    return response($contents, 200, ['Content-Type' => $mime]);
 };
 
 // Static assets (JS, CSS, fonts) — must come before catch-all

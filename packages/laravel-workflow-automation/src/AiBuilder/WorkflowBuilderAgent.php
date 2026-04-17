@@ -44,22 +44,26 @@ final class WorkflowBuilderAgent implements Agent, HasTools
         4. Connect nodes with connect_nodes using the correct ports.
         5. Respond with a brief explanation of what you did.
 
+        ## Tool parameters: config
+
+        For **add_node** and **update_node**, pass **config** as a JSON **string** (for example `"{}"` or `"{\"url\":\"https://example.com\"}"`), because the API validates tool parameters in strict mode.
+
         ## CRITICAL: Config Must Be Filled
 
         When adding a node, the config object MUST contain all required fields. NEVER pass an empty config `{}` — the node will be broken.
 
         Before calling add_node, ALWAYS call show_node_type first to learn the exact config fields. Then fill them in.
 
-        Examples of CORRECT add_node calls:
-        - add_node(workflow_id={$workflowId}, node_key="model_event", name="User Created", config={"model": "App\\\\Models\\\\User", "events": ["created"]})
-        - add_node(workflow_id={$workflowId}, node_key="send_mail", name="Welcome Email", config={"send_mode": "inline", "to": "{{ item.email }}", "subject": "Welcome!", "body": "Hello {{ item.name }}"})
-        - add_node(workflow_id={$workflowId}, node_key="http_request", name="Call API", config={"url": "https://api.example.com", "method": "POST", "body": {"key": "{{ item.id }}"}})
-        - add_node(workflow_id={$workflowId}, node_key="if_condition", name="Check Status", config={"field": "{{ item.status }}", "operator": "==", "value": "active"})
-        - add_node(workflow_id={$workflowId}, node_key="manual", name="Manual Trigger", config={})
+        Examples of CORRECT add_node calls (config is always a JSON string):
+        - add_node(workflow_id={$workflowId}, node_key="model_event", name="User Created", config="{\"model\":\"App\\\\Models\\\\User\",\"events\":[\"created\"]}")
+        - add_node(workflow_id={$workflowId}, node_key="send_mail", name="Welcome Email", config="{\"send_mode\":\"inline\",\"to\":\"{{ item.email }}\",\"subject\":\"Welcome!\",\"body\":\"Hello {{ item.name }}\"}")
+        - add_node(workflow_id={$workflowId}, node_key="http_request", name="Call API", config="{\"url\":\"https://api.example.com\",\"method\":\"POST\",\"body\":{\"key\":\"{{ item.id }}\"}}")
+        - add_node(workflow_id={$workflowId}, node_key="if_condition", name="Check Status", config="{\"field\":\"{{ item.status }}\",\"operator\":\"==\",\"value\":\"active\"}")
+        - add_node(workflow_id={$workflowId}, node_key="manual", name="Manual Trigger", config='{}')
 
         Examples of WRONG (broken) calls:
-        - add_node(workflow_id={$workflowId}, node_key="send_mail", name="Email", config={})  ← WRONG: missing to, subject, body
-        - add_node(workflow_id={$workflowId}, node_key="http_request", name="API", config={})  ← WRONG: missing url, method
+        - add_node(workflow_id={$workflowId}, node_key="send_mail", name="Email", config='{}')  ← WRONG: JSON must include to, subject, body
+        - add_node(workflow_id={$workflowId}, node_key="http_request", name="API", config='{}')  ← WRONG: JSON must include url, method
 
         ## Important Rules
 
@@ -89,17 +93,15 @@ final class WorkflowBuilderAgent implements Agent, HasTools
     {
         $service = app(WorkflowService::class);
 
-        $mcpTools = [
-            new \Aftandilmmd\WorkflowAutomation\Mcp\Tools\ShowWorkflowTool,
-            new \Aftandilmmd\WorkflowAutomation\Mcp\Tools\ShowNodeTypeTool($this->registry),
-            new \Aftandilmmd\WorkflowAutomation\Mcp\Tools\ListNodeTypesTool($this->registry),
-            new \Aftandilmmd\WorkflowAutomation\Mcp\Tools\AddNodeTool($service),
-            new \Aftandilmmd\WorkflowAutomation\Mcp\Tools\UpdateNodeTool,
-            new \Aftandilmmd\WorkflowAutomation\Mcp\Tools\RemoveNodeTool($service),
-            new \Aftandilmmd\WorkflowAutomation\Mcp\Tools\ConnectNodesTool($service),
-            new \Aftandilmmd\WorkflowAutomation\Mcp\Tools\RemoveEdgeTool($service),
+        return [
+            new ShowWorkflowAiBuilderTool,
+            new ShowNodeTypeAiBuilderTool($this->registry),
+            new ListNodeTypesAiBuilderTool($this->registry),
+            new AddNodeAiBuilderTool($service),
+            new UpdateNodeAiBuilderTool,
+            new RemoveNodeAiBuilderTool($service),
+            new ConnectNodesAiBuilderTool($service),
+            new RemoveEdgeAiBuilderTool($service),
         ];
-
-        return array_map(fn ($tool) => new McpToolAdapter($tool), $mcpTools);
     }
 }

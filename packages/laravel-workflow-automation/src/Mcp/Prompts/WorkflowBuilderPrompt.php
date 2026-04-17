@@ -187,8 +187,11 @@ final class WorkflowBuilderPrompt extends Prompt
 
             $parts = ["{$type}{$required}"];
 
-            if (! empty($field['options'])) {
-                $parts[] = 'options: '.implode('|', array_slice($field['options'], 0, 10));
+            if (! empty($field['options']) && is_array($field['options'])) {
+                $optionStrings = self::stringifySelectOptions(array_slice($field['options'], 0, 10));
+                if ($optionStrings !== []) {
+                    $parts[] = 'options: '.implode('|', $optionStrings);
+                }
             }
 
             if (! empty($field['supports_expression'])) {
@@ -203,6 +206,41 @@ final class WorkflowBuilderPrompt extends Prompt
         }
 
         return implode(', ', $fields);
+    }
+
+    /**
+     * @param  list<mixed>  $options
+     * @return list<string>
+     */
+    protected static function stringifySelectOptions(array $options): array
+    {
+        $strings = [];
+
+        foreach ($options as $opt) {
+            if (is_string($opt) || is_int($opt) || is_float($opt)) {
+                $strings[] = (string) $opt;
+
+                continue;
+            }
+
+            if (is_array($opt)) {
+                $value = $opt['value'] ?? null;
+                $label = $opt['label'] ?? null;
+                if ($value !== null && $value !== '') {
+                    $strings[] = (string) $value;
+                } elseif ($label !== null && $label !== '') {
+                    $strings[] = (string) $label;
+                } else {
+                    $strings[] = json_encode($opt, JSON_UNESCAPED_UNICODE) ?: '';
+                }
+
+                continue;
+            }
+
+            $strings[] = (string) $opt;
+        }
+
+        return array_values(array_filter($strings, fn (string $s): bool => $s !== ''));
     }
 
     protected static function formatOutputSchema(array $schema): string

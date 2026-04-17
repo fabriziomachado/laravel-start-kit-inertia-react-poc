@@ -7,6 +7,7 @@ namespace Aftandilmmd\WorkflowAutomation\Http\Controllers;
 use Aftandilmmd\WorkflowAutomation\Http\Requests\AiBuildRequest;
 use Aftandilmmd\WorkflowAutomation\Models\Workflow;
 use Aftandilmmd\WorkflowAutomation\Registry\NodeRegistry;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -57,9 +58,19 @@ final class AiBuilderController extends Controller
                 $args['model'] = $model;
             }
 
+            // #region agent log
+            $this->agentDebugLog('H1-H4', 'AiBuilderController.php:pre_stream', 'ai_build_stream_start', [
+                'workflow_id' => $workflow->id,
+                'provider_request' => $provider,
+                'model' => $model,
+                'openai_key_configured' => filled(config('ai.providers.openai.key')),
+                'prompt_length' => mb_strlen($request->validated('prompt')),
+            ]);
+            // #endregion
+
             $streamable = $agent->stream($request->validated('prompt'), ...$args);
 
-            return response()->stream(function () use ($streamable) {
+            return response()->stream(function () use ($streamable, $provider, $model, $workflow) {
                 try {
                     foreach ($streamable as $event) {
                         echo 'data: '.json_encode($event->toArray())."\n\n";
@@ -70,6 +81,21 @@ final class AiBuilderController extends Controller
                     ob_flush();
                     flush();
                 } catch (Throwable $e) {
+                    // #region agent log
+                    $httpData = [
+                        'exception' => $e::class,
+                        'message' => $e->getMessage(),
+                        'provider_request' => $provider,
+                        'model' => $model,
+                        'workflow_id' => $workflow->id,
+                    ];
+                    if ($e instanceof RequestException && $e->response !== null) {
+                        $httpData['http_status'] = $e->response->status();
+                        $httpData['response_body_preview'] = mb_substr($e->response->body(), 0, 800);
+                    }
+                    $this->agentDebugLog('H5', 'AiBuilderController.php:stream_catch', 'ai_build_stream_exception', $httpData);
+                    // #endregion
+
                     $error = json_encode([
                         'type' => 'error',
                         'message' => $e->getMessage().(config('app.debug') ? ' in '.$e->getFile().':'.$e->getLine() : ''),
@@ -86,6 +112,23 @@ final class AiBuilderController extends Controller
                 'X-Accel-Buffering' => 'no',
             ]);
         } catch (Throwable $e) {
+            // #region agent log
+            $httpData = [
+                'exception' => $e::class,
+                'message' => $e->getMessage(),
+            ];
+            if ($e instanceof RequestException && $e->response !== null) {
+                $httpData['http_status'] = $e->response->status();
+                $httpData['response_body_preview'] = mb_substr($e->response->body(), 0, 800);
+            }
+            $prev = $e->getPrevious();
+            if ($prev instanceof RequestException && $prev->response !== null) {
+                $httpData['previous_http_status'] = $prev->response->status();
+                $httpData['previous_response_body_preview'] = mb_substr($prev->response->body(), 0, 800);
+            }
+            $this->agentDebugLog('H0', 'AiBuilderController.php:outer_catch', 'ai_build_outer_exception', $httpData);
+            // #endregion
+
             $message = $e->getMessage();
 
             if (config('app.debug')) {
@@ -150,5 +193,31 @@ final class AiBuilderController extends Controller
         }
 
         return $map[$key];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function agentDebugLog(string $hypothesisId, string $location, string $message, array $data = []): void
+    {
+        $payload = json_encode([
+            'sessionId' => '8e0977',
+            'timestamp' => (int) (microtime(true) * 1000),
+            'hypothesisId' => $hypothesisId,
+            'location' => $location,
+            'message' => $message,
+            'data' => $data,
+        ], JSON_UNESCAPED_UNICODE);
+
+        if ($payload === false) {
+            return;
+        }
+
+        $path = base_path('.cursor/debug-8e0977.log');
+        $dir = dirname($path);
+        if (! is_dir($dir)) {
+            mkdir($dir, 0755, true);
+        }
+        file_put_contents($path, $payload."\n", FILE_APPEND | LOCK_EX);
     }
 }
