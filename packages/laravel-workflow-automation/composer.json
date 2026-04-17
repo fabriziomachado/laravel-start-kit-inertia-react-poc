@@ -1,0 +1,66 @@
+{
+    "name": "aftandilmmd/laravel-workflow-automation",
+    "description": "Graph-based workflow automation engine for Laravel — triggers, conditions, actions, loops, and more.",
+    "type": "library",
+    "keywords": [
+        "laravel",
+        "workflow",
+        "automation",
+        "engine",
+        "graph",
+        "orchestration"
+    ],
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Aftandil Mammadov",
+            "email": "aftandilmmd@gmail.com"
+        }
+    ],
+    "require": {
+        "php": "^8.3",
+        "illuminate/support": "^10.0|^11.0|^12.0|^13.0",
+        "illuminate/database": "^10.0|^11.0|^12.0|^13.0",
+        "illuminate/queue": "^10.0|^11.0|^12.0|^13.0",
+        "illuminate/events": "^10.0|^11.0|^12.0|^13.0",
+        "illuminate/http": "^10.0|^11.0|^12.0|^13.0",
+        "illuminate/mail": "^10.0|^11.0|^12.0|^13.0",
+        "illuminate/notifications": "^10.0|^11.0|^12.0|^13.0"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^8.0|^9.0|^10.0",
+        "pestphp/pest": "^2.0|^3.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Aftandilmmd\\WorkflowAutomation\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Aftandilmmd\\WorkflowAutomation\\Tests\\": "tests/",
+            "Aftandilmmd\\WorkflowAutomation\\Database\\Factories\\": "database/factories/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Aftandilmmd\\WorkflowAutomation\\WorkflowAutomationServiceProvider"
+            ],
+            "aliases": {
+                "Workflow": "Aftandilmmd\\WorkflowAutomation\\Facades\\Workflow",
+                "WorkflowAutomation": "Aftandilmmd\\WorkflowAutomation\\Facades\\WorkflowAutomation"
+            }
+        }
+    },
+    "suggest": {
+        "laravel/mcp": "Required for MCP server support — lets AI clients manage workflows via Model Context Protocol (^1.0)"
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    }
+}
