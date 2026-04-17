@@ -47,6 +47,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     headers,
     body: body != null ? JSON.stringify(body) : undefined,
     credentials: 'same-origin',
+    cache: 'no-store',
   })
 
   if (!res.ok) {

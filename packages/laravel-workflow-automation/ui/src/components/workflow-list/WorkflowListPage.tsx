@@ -56,8 +56,6 @@ export function WorkflowListPage() {
     setSort,
     setSelectedTagId,
     setSelectedFolderId,
-    fetchTags,
-    fetchFolders,
     createTag,
     deleteTag,
     createFolder,
@@ -86,12 +84,12 @@ export function WorkflowListPage() {
   const [expandedFolders, setExpandedFolders] = useState<Set<number>>(new Set())
   const [sidebarOpen] = useState(true)
 
-  // search/sort/direction are intentionally excluded — setSearch/setSort call fetchWorkflows directly
   useEffect(() => {
-    fetchWorkflows()
-    fetchTags()
-    fetchFolders()
-  }, [fetchWorkflows, fetchTags, fetchFolders])
+    const s = useWorkflowListStore.getState()
+    void s.fetchWorkflows(1)
+    void s.fetchTags()
+    void s.fetchFolders()
+  }, [])
 
   useEffect(() => {
     return () => clearTimeout(debounceRef.current)

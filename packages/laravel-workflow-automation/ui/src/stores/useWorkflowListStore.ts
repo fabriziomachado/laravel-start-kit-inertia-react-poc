@@ -4,6 +4,16 @@ import { workflowsApi } from '../api/workflows'
 import { tagsApi } from '../api/tags'
 import { foldersApi } from '../api/folders'
 
+let workflowsListFetchGeneration = 0
+
+function dedupeWorkflowsById(rows: Workflow[]): Workflow[] {
+  const seen = new Map<number, Workflow>()
+  for (const w of rows) {
+    seen.set(w.id, w)
+  }
+  return [...seen.values()]
+}
+
 interface WorkflowListStore {
   workflows: Workflow[]
   currentPage: number
@@ -53,6 +63,7 @@ export const useWorkflowListStore = create<WorkflowListStore>((set, get) => ({
 
   fetchWorkflows: async (page = 1) => {
     const { search, sort, direction, selectedTagId, selectedFolderId } = get()
+    const generation = ++workflowsListFetchGeneration
     set({ isLoading: true })
     try {
       const res = await workflowsApi.list({
@@ -64,14 +75,20 @@ export const useWorkflowListStore = create<WorkflowListStore>((set, get) => ({
         folder_id: selectedFolderId === 'uncategorized' ? undefined : (selectedFolderId ?? undefined),
         uncategorized: selectedFolderId === 'uncategorized' ? true : undefined,
       })
+      if (generation !== workflowsListFetchGeneration) {
+        return
+      }
+      const rows = Array.isArray(res.data) ? res.data : []
       set({
-        workflows: res.data,
+        workflows: dedupeWorkflowsById(rows),
         currentPage: res.meta.current_page,
         lastPage: res.meta.last_page,
         total: res.meta.total,
       })
     } finally {
-      set({ isLoading: false })
+      if (generation === workflowsListFetchGeneration) {
+        set({ isLoading: false })
+      }
     }
   },
 
@@ -133,18 +150,28 @@ export const useWorkflowListStore = create<WorkflowListStore>((set, get) => ({
 
   createWorkflow: async (name, description) => {
     const res = await workflowsApi.create({ name, description, created_via: 'editor' })
-    await get().fetchWorkflows(get().currentPage)
+    await get().fetchWorkflows(1)
     return res.data
   },
 
   deleteWorkflow: async (id) => {
+    const { currentPage, workflows } = get()
+    const wasSoleItemOnPage = workflows.length === 1
     await workflowsApi.destroy(id)
-    await get().fetchWorkflows(get().currentPage)
+    let page = currentPage
+    if (wasSoleItemOnPage && page > 1) {
+      page -= 1
+    }
+    await get().fetchWorkflows(page)
+    const s = get()
+    if (s.workflows.length === 0 && s.currentPage > 1 && s.total > 0) {
+      await get().fetchWorkflows(s.currentPage - 1)
+    }
   },
 
   duplicateWorkflow: async (id) => {
     await workflowsApi.duplicate(id)
-    await get().fetchWorkflows(get().currentPage)
+    await get().fetchWorkflows(1)
   },
 
   toggleActive: async (id, currentlyActive) => {
