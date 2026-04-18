@@ -13,7 +13,7 @@ return new class extends Migration
         Schema::create('workflow_definition_audits', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('workflow_id')->constrained(config('workflow-automation.tables.workflows', 'workflows'))->cascadeOnDelete();
-            $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete();
+            $table->foreignUuid('user_id')->nullable()->constrained()->nullOnDelete();
             $table->string('action', 32);
             $table->json('snapshot');
             $table->timestamps();
