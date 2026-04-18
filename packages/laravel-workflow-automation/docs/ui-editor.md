@@ -259,6 +259,8 @@ php artisan vendor:publish --tag=workflow-automation-editor
 
 This copies the built assets to `public/workflow-editor/`. Published assets take priority over the package's built-in files.
 
+When using PHP’s built-in server (`php artisan serve`, Laravel Sail), add a **`server.php` file in your application root** (same pattern as this starter kit) so that `/workflow-editor` and `/workflow-editor/{id}` always reach Laravel while `/workflow-editor/assets/*` can still be served as static files. Without that router tweak, deep links to the editor can return 404 because the built-in server maps them onto `public/workflow-editor/index.html` with `PATH_INFO`.
+
 ## Development
 
 To work on the editor UI itself:
