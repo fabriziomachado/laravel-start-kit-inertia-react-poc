@@ -124,7 +124,7 @@ it('submete os três passos do wizard e conclui o fluxo', function (): void {
             'accept_terms' => true,
         ]);
 
-    $third->assertRedirect(route('matricular'));
+    $third->assertRedirect(route('flows.index'));
 
     $run->refresh();
     expect($run->status)->toBe(RunStatus::Completed);

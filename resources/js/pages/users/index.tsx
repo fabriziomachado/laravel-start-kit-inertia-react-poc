@@ -44,7 +44,7 @@ export default function UsersIndex({ users }: { users: PaginatedUsers }) {
                     <h1 className="text-2xl font-semibold tracking-tight">
                         Utilizadores
                     </h1>
-                    <p className="text-muted-foreground text-sm">
+                    <p className="text-sm text-muted-foreground">
                         Lista de contas registadas. Apenas administradores podem
                         impersonar outro utilizador.
                     </p>
@@ -52,13 +52,15 @@ export default function UsersIndex({ users }: { users: PaginatedUsers }) {
 
                 <div className="overflow-x-auto rounded-lg border border-sidebar-border/70 dark:border-sidebar-border">
                     <table className="w-full min-w-[640px] text-left text-sm">
-                        <thead className="bg-muted/50 border-b">
+                        <thead className="border-b bg-muted/50">
                             <tr>
                                 <th className="px-4 py-3 font-medium">Nome</th>
                                 <th className="px-4 py-3 font-medium">Email</th>
                                 <th className="px-4 py-3 font-medium">Admin</th>
-                                <th className="px-4 py-3 font-medium">Criado</th>
-                                <th className="px-4 py-3 font-medium text-right">
+                                <th className="px-4 py-3 font-medium">
+                                    Criado
+                                </th>
+                                <th className="px-4 py-3 text-right font-medium">
                                     Ações
                                 </th>
                             </tr>
@@ -72,13 +74,13 @@ export default function UsersIndex({ users }: { users: PaginatedUsers }) {
                                     <td className="px-4 py-3 font-medium">
                                         {row.name}
                                     </td>
-                                    <td className="text-muted-foreground px-4 py-3">
+                                    <td className="px-4 py-3 text-muted-foreground">
                                         {row.email}
                                     </td>
                                     <td className="px-4 py-3">
                                         {row.is_admin ? 'Sim' : 'Não'}
                                     </td>
-                                    <td className="text-muted-foreground px-4 py-3">
+                                    <td className="px-4 py-3 text-muted-foreground">
                                         {row.created_at}
                                     </td>
                                     <td className="px-4 py-3 text-right">
@@ -99,7 +101,7 @@ export default function UsersIndex({ users }: { users: PaginatedUsers }) {
                                                 </Link>
                                             </Button>
                                         ) : (
-                                            <span className="text-muted-foreground text-xs">
+                                            <span className="text-xs text-muted-foreground">
                                                 —
                                             </span>
                                         )}

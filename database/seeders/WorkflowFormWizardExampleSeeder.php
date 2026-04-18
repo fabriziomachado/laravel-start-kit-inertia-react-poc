@@ -114,7 +114,7 @@ final class WorkflowFormWizardExampleSeeder extends Seeder
 
         $this->command?->newLine();
         $this->command?->info(sprintf(
-            'Assistente /matricular: ajuste DEFAULT_WORKFLOW_ID em App\\Http\\Controllers\\Wizards\\MatriculaWorkflowBinding para %s.',
+            'Fluxo de exemplo disponível em /flows (workflow id %s).',
             (string) $workflow->getKey(),
         ));
 

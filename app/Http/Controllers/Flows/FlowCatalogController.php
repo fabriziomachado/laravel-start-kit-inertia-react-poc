@@ -2,42 +2,65 @@
 
 declare(strict_types=1);
 
-namespace App\Http\Controllers\Wizards;
+namespace App\Http\Controllers\Flows;
 
 use Aftandilmmd\WorkflowAutomation\Enums\RunStatus;
 use Aftandilmmd\WorkflowAutomation\Models\Workflow;
 use Aftandilmmd\WorkflowAutomation\Models\WorkflowRun;
-use Aftandilmmd\WorkflowAutomation\Services\WorkflowService;
+use App\Flows\FlowRunStarter;
+use App\Flows\WorkflowStarterPayload;
 use App\Models\User;
 use App\Support\WorkflowFormProgress;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
 
-final class MatricularWizardController
+final class FlowCatalogController
 {
+    public function __construct(
+        private FlowRunStarter $flowRunStarter,
+    ) {}
+
     public function index(Request $request): Response|RedirectResponse
     {
-        $workflow = $this->resolveMatriculaWorkflow();
+        $workflows = Workflow::query()
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'description']);
 
-        if ($workflow === null) {
+        if ($workflows->isEmpty()) {
             return redirect()
                 ->route('dashboard')
-                ->with('matricula_error', 'O assistente de matrícula não está disponível. Contacte o administrador.');
+                ->with('flows_error', 'Não há fluxos disponíveis. Contacte o administrador.');
         }
 
         $currentUserId = (string) $request->user()->id;
         $isAdmin = (bool) $request->user()->is_admin;
 
+        $activeWorkflowIds = $workflows->pluck('id')->all();
+
         $runsCollection = WorkflowRun::query()
-            ->where('workflow_id', $workflow->id)
+            ->whereIn('workflow_id', $activeWorkflowIds)
+            ->with('workflow')
             ->orderByDesc('id')
-            ->limit(50)
-            ->get();
+            ->limit(100)
+            ->get()
+            ->filter(function (WorkflowRun $run) use ($currentUserId, $isAdmin): bool {
+                if ($isAdmin) {
+                    return true;
+                }
+
+                $starterId = WorkflowStarterPayload::starterUserId($run);
+
+                return $starterId !== null && $starterId === $currentUserId;
+            })
+            ->take(50)
+            ->values();
 
         $starterIds = $runsCollection
-            ->map(static fn (WorkflowRun $run): ?string => self::starterUserId($run))
+            ->map(static fn (WorkflowRun $run): ?string => WorkflowStarterPayload::starterUserId($run))
             ->filter(static fn (?string $id): bool => $id !== null && $id !== '')
             ->unique()
             ->values()
@@ -59,75 +82,48 @@ final class MatricularWizardController
                 $starterNames,
             ));
 
-        return Inertia::render('matricular/Index', [
-            'workflow_name' => $workflow->name,
+        return Inertia::render('flows/Index', [
+            'workflows' => $workflows->map(static fn (Workflow $w): array => [
+                'id' => $w->id,
+                'name' => $w->name,
+                'description' => $w->description,
+            ])->values()->all(),
             'runs' => $runs,
         ]);
     }
 
-    public function store(Request $request, WorkflowService $workflowService): RedirectResponse
+    public function store(Request $request, Workflow $workflow): RedirectResponse
     {
-        $workflow = $this->resolveMatriculaWorkflow();
+        Gate::authorize('start', $workflow);
 
-        if ($workflow === null || ! $workflow->is_active) {
-            return redirect()
-                ->route('matricular')
-                ->with('matricula_error', 'O assistente de matrícula não está disponível. Contacte o administrador.');
-        }
-
-        $run = $workflowService->run($workflow, [['matricula_user_id' => $request->user()->id]]);
-
-        if ($run->status !== RunStatus::Waiting) {
-            return redirect()
-                ->route('matricular')
-                ->with('matricula_error', 'Não foi possível iniciar a matrícula. Tente novamente mais tarde.');
-        }
-
-        $token = $this->resumeTokenForWaitingRun($run);
-
-        if (! is_string($token) || $token === '') {
-            return redirect()
-                ->route('matricular')
-                ->with('matricula_error', 'Não foi possível iniciar a matrícula. Tente novamente mais tarde.');
-        }
-
-        return redirect()->route('workflow-forms.show', ['token' => $token]);
+        return $this->flowRunStarter->startOrRedirectToForm(
+            $workflow,
+            $request->user(),
+            'flows.index',
+        );
     }
 
     public function show(Request $request, WorkflowRun $run): Response|RedirectResponse
     {
-        $workflow = $this->resolveMatriculaWorkflow();
-
-        if ($workflow === null) {
-            return redirect()
-                ->route('dashboard')
-                ->with('matricula_error', 'O assistente de matrícula não está disponível. Contacte o administrador.');
-        }
-
-        if ($run->workflow_id !== $workflow->id) {
-            abort(404);
-        }
+        Gate::authorize('view', $run);
 
         if ($run->status !== RunStatus::Completed) {
             abort(404);
         }
 
-        $user = $request->user();
-        $starterId = self::starterUserId($run);
-        $isAdmin = (bool) $user->is_admin;
-        $mayView = $isAdmin || ($starterId !== null && $starterId === (string) $user->id);
-
-        if (! $mayView) {
-            abort(403);
+        $workflow = $run->workflow;
+        if ($workflow === null || ! $workflow->is_active) {
+            abort(404);
         }
 
+        $starterId = WorkflowStarterPayload::starterUserId($run);
         $iniciadaPor = '—';
         if ($starterId !== null) {
             $starter = User::query()->find($starterId);
             $iniciadaPor = $starter !== null ? (string) $starter->name : 'Conta removida ou desconhecida';
         }
 
-        return Inertia::render('matricular/Show', [
+        return Inertia::render('flows/Show', [
             'run_id' => $run->id,
             'workflow_name' => $workflow->name,
             'iniciada_por_label' => $iniciadaPor,
@@ -136,48 +132,16 @@ final class MatricularWizardController
         ]);
     }
 
-    private static function starterUserId(WorkflowRun $run): ?string
-    {
-        $raw = data_get($run->initial_payload, '0.matricula_user_id');
-        if ($raw === null || $raw === '') {
-            return null;
-        }
-
-        return (string) $raw;
-    }
-
-    private function resolveMatriculaWorkflow(): ?Workflow
-    {
-        $id = MatriculaWorkflowBinding::workflowId();
-        if ($id < 1) {
-            return null;
-        }
-
-        $workflow = Workflow::query()->find($id);
-        if ($workflow === null || ! $workflow->is_active) {
-            return null;
-        }
-
-        return $workflow;
-    }
-
-    private function resumeTokenForWaitingRun(WorkflowRun $run): ?string
-    {
-        $token = $run->nodeRuns()
-            ->orderByDesc('id')
-            ->first()
-            ?->output['main'][0]['resume_token'] ?? null;
-
-        return is_string($token) && $token !== '' ? $token : null;
-    }
-
     /**
      * @param  array<string, string>  $starterNames
-     * @return array{id: int, status: string, status_label: string, created_at: string|null, iniciada_por_label: string, resume_url: string|null, view_url: string|null, error_message: string|null}
+     * @return array{id: int, workflow_id: int, workflow_name: string, status: string, status_label: string, created_at: string|null, iniciada_por_label: string, resume_url: string|null, view_url: string|null, error_message: string|null}
      */
     private function runToListItem(WorkflowRun $run, string $currentUserId, bool $isAdmin, array $starterNames): array
     {
-        $starterId = self::starterUserId($run);
+        $workflow = $run->workflow;
+        $workflowName = $workflow !== null ? (string) $workflow->name : '—';
+
+        $starterId = WorkflowStarterPayload::starterUserId($run);
         $iniciadaPor = '—';
         if ($starterId !== null) {
             $iniciadaPor = $starterNames[$starterId] ?? 'Conta removida ou desconhecida';
@@ -187,7 +151,7 @@ final class MatricularWizardController
 
         $resumeUrl = null;
         if ($run->status === RunStatus::Waiting && $mayAccess) {
-            $token = $this->resumeTokenForWaitingRun($run);
+            $token = FlowRunStarter::resumeTokenForWaitingRun($run);
             if (is_string($token) && $token !== '') {
                 $resumeUrl = route('workflow-forms.show', ['token' => $token]);
             }
@@ -195,11 +159,13 @@ final class MatricularWizardController
 
         $viewUrl = null;
         if ($run->status === RunStatus::Completed && $mayAccess) {
-            $viewUrl = route('matricular.runs.show', ['run' => $run->id]);
+            $viewUrl = route('flows.runs.show', ['run' => $run->id]);
         }
 
         return [
             'id' => $run->id,
+            'workflow_id' => (int) $run->workflow_id,
+            'workflow_name' => $workflowName,
             'status' => $run->status->value,
             'status_label' => $this->runStatusLabel($run->status),
             'created_at' => $run->created_at?->toIso8601String(),

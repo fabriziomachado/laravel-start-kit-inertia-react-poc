@@ -37,8 +37,10 @@ const getCookieValue = (name: string): string | null => {
     }
 
     const prefix = `${name}=`;
-    const part = document.cookie.split('; ').find((row) => row.startsWith(prefix));
-    if (! part) {
+    const part = document.cookie
+        .split('; ')
+        .find((row) => row.startsWith(prefix));
+    if (!part) {
         return null;
     }
 
@@ -51,11 +53,9 @@ const storageKey = (userId: string | undefined | null): string =>
 const isValidAppearance = (value: string | null): value is Appearance =>
     value === 'light' || value === 'dark' || value === 'system';
 
-function readAppearanceFromJsonCookie(
-    userId: string,
-): Appearance | null {
+function readAppearanceFromJsonCookie(userId: string): Appearance | null {
     const existing = getCookieValue('appearance');
-    if (! existing?.startsWith('{')) {
+    if (!existing?.startsWith('{')) {
         return null;
     }
 
@@ -77,7 +77,7 @@ function readStoredAppearance(userId: string | undefined | null): Appearance {
     const key = storageKey(userId);
     let raw = localStorage.getItem(key);
 
-    if (! raw && userId) {
+    if (!raw && userId) {
         const fromCookie = readAppearanceFromJsonCookie(userId);
         if (fromCookie !== null) {
             localStorage.setItem(key, fromCookie);
@@ -85,21 +85,17 @@ function readStoredAppearance(userId: string | undefined | null): Appearance {
         }
     }
 
-    if (! raw && userId) {
+    if (!raw && userId) {
         const plain = getCookieValue('appearance');
-        if (
-            plain &&
-            ! plain.startsWith('{') &&
-            isValidAppearance(plain)
-        ) {
+        if (plain && !plain.startsWith('{') && isValidAppearance(plain)) {
             raw = plain;
             localStorage.setItem(key, plain);
         }
     }
 
-    if (! raw && ! userId) {
+    if (!raw && !userId) {
         const plain = getCookieValue('appearance');
-        if (plain && ! plain.startsWith('{') && isValidAppearance(plain)) {
+        if (plain && !plain.startsWith('{') && isValidAppearance(plain)) {
             raw = plain;
             localStorage.setItem(key, plain);
         }
@@ -116,7 +112,7 @@ function mergeAppearanceCookie(
     userId: string | undefined | null,
     mode: Appearance,
 ): void {
-    if (! userId) {
+    if (!userId) {
         setCookie('appearance', mode);
 
         return;
@@ -128,7 +124,11 @@ function mergeAppearanceCookie(
     if (existing && existing.startsWith('{')) {
         try {
             const parsed = JSON.parse(existing) as unknown;
-            if (parsed !== null && typeof parsed === 'object' && ! Array.isArray(parsed)) {
+            if (
+                parsed !== null &&
+                typeof parsed === 'object' &&
+                !Array.isArray(parsed)
+            ) {
                 map = { ...parsed } as Record<string, string>;
             }
         } catch {
@@ -181,7 +181,7 @@ function getInitialUserIdFromPagePayload(): string | null {
     const script = document.querySelector(
         'script[type="application/json"][data-page]',
     );
-    if (! script?.textContent) {
+    if (!script?.textContent) {
         return null;
     }
 

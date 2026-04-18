@@ -19,16 +19,16 @@ export function KeyValueField({ value, onChange }: Props) {
   }
 
   const updateValue = (key: string, newValue: string) => {
-    onChange({ ...(value ?? {}), [key]: newValue })
+    onChange({ ...value, [key]: newValue })
   }
 
   const addPair = () => {
     const newKey = `key_${pairs.length}`
-    onChange({ ...(value ?? {}), [newKey]: '' })
+    onChange({ ...value, [newKey]: '' })
   }
 
   const removePair = (key: string) => {
-    const copy = { ...(value ?? {}) }
+    const copy = { ...value }
     delete copy[key]
     onChange(copy)
   }

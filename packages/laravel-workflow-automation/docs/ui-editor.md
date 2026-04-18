@@ -119,7 +119,7 @@ If you installed the package via Composer, the pre-built UI files are included. 
 
 ```bash
 cd vendor/aftandilmmd/laravel-workflow-automation/ui
-npm install && npm run build
+bun install && bun run build
 ```
 :::
 
@@ -267,10 +267,10 @@ To work on the editor UI itself:
 cd vendor/aftandilmmd/laravel-workflow-automation/ui
 
 # Install dependencies
-npm install
+bun install
 
 # Start dev server with HMR
-npm run dev
+bun run dev
 ```
 
 The Vite dev server runs at `http://localhost:5173` and proxies API requests to `http://localhost:8000`.
@@ -279,7 +279,7 @@ The Vite dev server runs at `http://localhost:5173` and proxies API requests to 
 
 ```bash
 cd vendor/aftandilmmd/laravel-workflow-automation/ui
-npm run build
+bun run build
 ```
 
 The built files are output to `ui/dist/` and served automatically by the package.

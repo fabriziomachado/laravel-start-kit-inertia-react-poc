@@ -15,7 +15,7 @@ use App\Http\Controllers\UserListController;
 use App\Http\Controllers\UserPasswordController;
 use App\Http\Controllers\UserProfileController;
 use App\Http\Controllers\UserTwoFactorAuthenticationController;
-use App\Http\Controllers\Wizards\MatricularWizardController;
+use App\Http\Controllers\Flows\FlowCatalogController;
 use App\Http\Controllers\WorkflowFormController;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -63,10 +63,10 @@ Route::get('/', fn () => Inertia::render('welcome'))->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function (): void {
     Route::get('dashboard', fn () => Inertia::render('dashboard'))->name('dashboard');
-    Route::get('matricular', [MatricularWizardController::class, 'index'])->name('matricular');
-    Route::get('matricular/runs/{run}', [MatricularWizardController::class, 'show'])
-        ->name('matricular.runs.show');
-    Route::post('matricular', [MatricularWizardController::class, 'store'])->name('matricular.store');
+    Route::redirect('matricular', '/flows');
+    Route::get('flows', [FlowCatalogController::class, 'index'])->name('flows.index');
+    Route::get('flows/runs/{run}', [FlowCatalogController::class, 'show'])->name('flows.runs.show');
+    Route::post('flows/{workflow}/runs', [FlowCatalogController::class, 'store'])->name('flows.runs.store');
     Route::get('users', [UserListController::class, 'index'])->name('users.index');
     Route::impersonate();
 

@@ -5,43 +5,34 @@ declare(strict_types=1);
 use Aftandilmmd\WorkflowAutomation\Engine\GraphExecutor;
 use Aftandilmmd\WorkflowAutomation\Enums\RunStatus;
 use Aftandilmmd\WorkflowAutomation\Models\Workflow;
-use App\Http\Controllers\Wizards\MatriculaWorkflowBinding;
 use App\Models\User;
 use Database\Seeders\WorkflowFormWizardExampleSeeder;
 
-afterEach(function (): void {
-    MatriculaWorkflowBinding::setWorkflowIdForTesting(null);
-});
-
-function configureMatriculaExampleWorkflow(): Workflow
+function configureExampleWorkflow(): Workflow
 {
     test()->seed(WorkflowFormWizardExampleSeeder::class);
-    $workflow = Workflow::query()->where('name', WorkflowFormWizardExampleSeeder::WORKFLOW_NAME)->firstOrFail();
-    MatriculaWorkflowBinding::setWorkflowIdForTesting((int) $workflow->getKey());
 
-    return $workflow;
+    return Workflow::query()->where('name', WorkflowFormWizardExampleSeeder::WORKFLOW_NAME)->firstOrFail();
 }
 
-it('mostra a página de matrícula sem iniciar o fluxo', function (): void {
-    configureMatriculaExampleWorkflow();
+it('mostra o catálogo de fluxos activos', function (): void {
+    configureExampleWorkflow();
 
     $user = User::factory()->create();
 
-    $response = $this->actingAs($user)->get(route('matricular'));
-
-    $response->assertOk();
-    $response->assertInertia(fn ($page) => $page
-        ->component('matricular/Index')
-        ->where('workflow_name', WorkflowFormWizardExampleSeeder::WORKFLOW_NAME)
+    $this->actingAs($user)->get(route('flows.index'))->assertOk()->assertInertia(fn ($page) => $page
+        ->component('flows/Index')
+        ->has('workflows', 1)
+        ->where('workflows.0.name', WorkflowFormWizardExampleSeeder::WORKFLOW_NAME)
         ->has('runs'));
 });
 
 it('inicia o fluxo ao submeter POST e redireciona para o primeiro passo', function (): void {
-    configureMatriculaExampleWorkflow();
+    $workflow = configureExampleWorkflow();
 
     $user = User::factory()->create();
 
-    $response = $this->actingAs($user)->post(route('matricular.store'));
+    $response = $this->actingAs($user)->post(route('flows.runs.store', $workflow));
 
     $response->assertRedirect();
 
@@ -51,56 +42,71 @@ it('inicia o fluxo ao submeter POST e redireciona para o primeiro passo', functi
     $this->actingAs($user)->get($target)->assertOk();
 });
 
-it('lista todas as instâncias do fluxo após iniciar uma', function (): void {
-    configureMatriculaExampleWorkflow();
+it('lista instâncias do fluxo após iniciar uma', function (): void {
+    $workflow = configureExampleWorkflow();
 
     $user = User::factory()->create();
 
-    $this->actingAs($user)->post(route('matricular.store'))->assertRedirect();
+    $this->actingAs($user)->post(route('flows.runs.store', $workflow))->assertRedirect();
 
     $this->actingAs($user)
-        ->get(route('matricular'))
+        ->get(route('flows.index'))
         ->assertOk()
         ->assertInertia(fn ($page) => $page
-            ->component('matricular/Index')
+            ->component('flows/Index')
             ->has('runs', 1));
 });
 
-it('outro utilizador vê a mesma instância na listagem global', function (): void {
-    configureMatriculaExampleWorkflow();
+it('utilizador não administrador só vê as próprias execuções na listagem', function (): void {
+    $workflow = configureExampleWorkflow();
 
-    $alice = User::factory()->create(['name' => 'Alice Matrícula']);
+    $alice = User::factory()->create(['name' => 'Alice Fluxo']);
     $bob = User::factory()->create(['name' => 'Bob Lista']);
 
-    $this->actingAs($alice)->post(route('matricular.store'))->assertRedirect();
+    $this->actingAs($alice)->post(route('flows.runs.store', $workflow))->assertRedirect();
 
     $this->actingAs($bob)
-        ->get(route('matricular'))
+        ->get(route('flows.index'))
         ->assertOk()
         ->assertInertia(fn ($page) => $page
-            ->component('matricular/Index')
-            ->has('runs', 1)
-            ->where('runs.0.iniciada_por_label', 'Alice Matrícula'));
+            ->component('flows/Index')
+            ->has('runs', 0));
 });
 
-it('redireciona ao dashboard com mensagem quando o workflow não existe', function (): void {
-    MatriculaWorkflowBinding::setWorkflowIdForTesting(999_999_999);
+it('administrador vê execuções de outros utilizadores na listagem', function (): void {
+    $workflow = configureExampleWorkflow();
+
+    $alice = User::factory()->create(['name' => 'Alice Admin']);
+    $admin = User::factory()->admin()->create();
+
+    $this->actingAs($alice)->post(route('flows.runs.store', $workflow))->assertRedirect();
+
+    $this->actingAs($admin)
+        ->get(route('flows.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('flows/Index')
+            ->has('runs', 1)
+            ->where('runs.0.iniciada_por_label', 'Alice Admin'));
+});
+
+it('redireciona ao dashboard com mensagem quando não há fluxos activos', function (): void {
+    Workflow::query()->update(['is_active' => false]);
 
     $user = User::factory()->create();
 
     $this->actingAs($user)
-        ->get(route('matricular'))
+        ->get(route('flows.index'))
         ->assertRedirect(route('dashboard'));
 
     $this->actingAs($user)
         ->get(route('dashboard'))
         ->assertOk()
-        ->assertInertia(fn ($page) => $page
-            ->has('matricula_error'));
+        ->assertInertia(fn ($page) => $page->has('flows_error'));
 });
 
-it('permite ao titular ver na lista e abrir o resumo só de leitura de uma matrícula concluída', function (): void {
-    $workflow = configureMatriculaExampleWorkflow();
+it('permite ao titular ver na lista e abrir o resumo só de leitura de uma execução concluída', function (): void {
+    $workflow = configureExampleWorkflow();
 
     $user = User::factory()->create();
     $run = app(GraphExecutor::class)->execute($workflow, [['matricula_user_id' => $user->id]]);
@@ -130,15 +136,15 @@ it('permite ao titular ver na lista e abrir o resumo só de leitura de uma matr�
             'reason' => 'Teste resumo',
             'accept_terms' => true,
         ])
-        ->assertRedirect(route('matricular'));
+        ->assertRedirect(route('flows.index'));
 
     $run->refresh();
     expect($run->status)->toBe(RunStatus::Completed);
 
-    $viewUrl = route('matricular.runs.show', $run);
+    $viewUrl = route('flows.runs.show', $run);
 
     $this->actingAs($user)
-        ->get(route('matricular'))
+        ->get(route('flows.index'))
         ->assertOk()
         ->assertInertia(fn ($page) => $page
             ->has('runs', 1)
@@ -149,7 +155,7 @@ it('permite ao titular ver na lista e abrir o resumo só de leitura de uma matr�
         ->get($viewUrl)
         ->assertOk()
         ->assertInertia(fn ($page) => $page
-            ->component('matricular/Show')
+            ->component('flows/Show')
             ->where('run_id', $run->id)
             ->where('workflow_name', WorkflowFormWizardExampleSeeder::WORKFLOW_NAME)
             ->where('iniciada_por_label', $user->name)
@@ -159,8 +165,8 @@ it('permite ao titular ver na lista e abrir o resumo só de leitura de uma matr�
                 ->contains('Dados pessoais')));
 });
 
-it('não permite a outro utilizador ver o resumo de matrícula concluída', function (): void {
-    $workflow = configureMatriculaExampleWorkflow();
+it('não permite a outro utilizador ver o resumo de execução concluída', function (): void {
+    $workflow = configureExampleWorkflow();
 
     $alice = User::factory()->create();
     $bob = User::factory()->create();
@@ -189,27 +195,27 @@ it('não permite a outro utilizador ver o resumo de matrícula concluída', func
             'reason' => 'Motivo',
             'accept_terms' => true,
         ])
-        ->assertRedirect(route('matricular'));
+        ->assertRedirect(route('flows.index'));
 
     $run->refresh();
     expect($run->status)->toBe(RunStatus::Completed);
 
-    $this->actingAs($bob)->get(route('matricular.runs.show', $run->id))->assertForbidden();
+    $this->actingAs($bob)->get(route('flows.runs.show', $run->id))->assertForbidden();
 });
 
 it('responde 404 ao pedir resumo de instância ainda em curso', function (): void {
-    $workflow = configureMatriculaExampleWorkflow();
+    $workflow = configureExampleWorkflow();
 
     $user = User::factory()->create();
     $run = app(GraphExecutor::class)->execute($workflow, [['matricula_user_id' => $user->id]]);
 
     expect($run->fresh()->status)->toBe(RunStatus::Waiting);
 
-    $this->actingAs($user)->get(route('matricular.runs.show', $run->id))->assertNotFound();
+    $this->actingAs($user)->get(route('flows.runs.show', $run->id))->assertNotFound();
 });
 
-it('permite a um administrador ver o resumo de matrícula concluída de outro utilizador', function (): void {
-    $workflow = configureMatriculaExampleWorkflow();
+it('permite a um administrador ver o resumo de execução concluída de outro utilizador', function (): void {
+    $workflow = configureExampleWorkflow();
 
     $alice = User::factory()->create();
     $admin = User::factory()->admin()->create();
@@ -238,15 +244,15 @@ it('permite a um administrador ver o resumo de matrícula concluída de outro ut
             'reason' => 'Motivo',
             'accept_terms' => true,
         ])
-        ->assertRedirect(route('matricular'));
+        ->assertRedirect(route('flows.index'));
 
     $run->refresh();
     expect($run->status)->toBe(RunStatus::Completed);
 
     $this->actingAs($admin)
-        ->get(route('matricular.runs.show', $run->id))
+        ->get(route('flows.runs.show', $run->id))
         ->assertOk()
         ->assertInertia(fn ($page) => $page
-            ->component('matricular/Show')
+            ->component('flows/Show')
             ->where('iniciada_por_label', $alice->name));
 });

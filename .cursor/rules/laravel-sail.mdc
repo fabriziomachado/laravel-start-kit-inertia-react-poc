@@ -5,5 +5,5 @@ alwaysApply: true
 
 # Laravel Sail
 
-- O ambiente de desenvolvimento usa **Laravel Sail** (Docker). Para Composer, Artisan, Pest, Pint e PHP no contexto da app, prefira **`./vendor/bin/sail`** com os contentores a correr (ex.: `./vendor/bin/sail composer install`, `./vendor/bin/sail artisan migrate`, `./vendor/bin/sail test`, `./vendor/bin/sail pint`).
-- Não assumir que `php` ou `composer` no host substituem o Sail para instalar dependências ou correr a aplicação alinhada ao projeto.
+- O ambiente de desenvolvimento usa **Laravel Sail** (Docker). Para Composer, Artisan, Pest, Pint, PHP, **Bun** (Vite, dependências JS, `test:types`, pacotes pontuais com `bunx`, etc.) no contexto da app, prefira **`./vendor/bin/sail`** com os contentores a correr (ex.: `./vendor/bin/sail composer install`, `./vendor/bin/sail artisan migrate`, `./vendor/bin/sail test`, `./vendor/bin/sail pint`, `./vendor/bin/sail bun install`, `./vendor/bin/sail bun run test:types`).
+- Não assumir que `php`, `composer` ou `bun` no host substituem o Sail para instalar dependências ou correr a aplicação alinhada ao projeto.

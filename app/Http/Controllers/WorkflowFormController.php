@@ -135,8 +135,8 @@ final class WorkflowFormController
         }
 
         return redirect()
-            ->route('matricular')
-            ->with('matricula_success', 'Matrícula concluída. A instância aparece na listagem abaixo.');
+            ->route('flows.index')
+            ->with('flows_success', 'Fluxo concluído. A execução aparece na listagem abaixo.');
     }
 
     private function findWaitingFormNodeRunByToken(string $token): ?WorkflowNodeRun
