@@ -12,7 +12,7 @@ $spaHandler = function () {
     $path = file_exists($published) ? $published : $packaged;
 
     if (! file_exists($path)) {
-        abort(404, 'Workflow UI not built. Run: cd vendor/aftandilmmd/laravel-workflow-automation/ui && npm install && npm run build');
+        abort(404, 'Workflow UI not built. Run: cd vendor/aftandilmmd/laravel-workflow-automation/ui && bun install && bun run build');
     }
 
     $contents = file_get_contents($path);
