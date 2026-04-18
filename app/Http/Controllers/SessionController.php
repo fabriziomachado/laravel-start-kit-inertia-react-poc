@@ -30,19 +30,19 @@ final readonly class SessionController
         
         ['email' => $email, 'password' => $password] = $request->safe()->only('email', 'password');
         
-        // Create credentials object
-        $credentials = new PrssLoginR01Dto(
-            credentialId: (string) $email,
-            credentialType: (string) 'EML',
-            password: (string) $password,
-        );
+        // // Create credentials object
+        // $credentials = new PrssLoginR01Dto(
+        //     credentialId: (string) $email,
+        //     credentialType: (string) 'EML',
+        //     password: (string) $password,
+        // );
 
    
-        $resultset = DB::connection('sau')
-            ->rpc('prss_login_r01')
-            ->with($credentials)
-            ->throwOnError()
-            ->getAs(PrssLoginR01ResultDto::class);
+        // $resultset = DB::connection('sau')
+        //     ->rpc('prss_login_r01')
+        //     ->with($credentials)
+        //     ->throwOnError()
+        //     ->getAs(PrssLoginR01ResultDto::class);
         
        
 
