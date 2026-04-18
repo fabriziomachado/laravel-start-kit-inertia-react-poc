@@ -1,6 +1,7 @@
-import { Head, Link, router, usePage } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 import { GitBranch } from 'lucide-react';
 import { useCallback, useState } from 'react';
+import { RecentExecutionsAudit } from '@/components/flows/recent-executions-audit';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
@@ -48,7 +49,7 @@ export default function FlowsIndex({
     workflows: WorkflowRow[];
     runs: RunRow[];
 }) {
-    const { flows_error, flows_success } = usePage<SharedData>().props;
+    const { flows_error, flows_success, auth } = usePage<SharedData>().props;
     const [startingId, setStartingId] = useState<number | null>(null);
 
     const startWorkflow = useCallback((workflow: WorkflowRow) => {
@@ -140,106 +141,10 @@ export default function FlowsIndex({
                 </section>
 
                 <section className="space-y-3">
-                    <h2 className="text-lg font-medium tracking-tight">
-                        Execuções recentes
-                    </h2>
-                    <div className="overflow-x-auto rounded-lg border border-sidebar-border/70 dark:border-sidebar-border">
-                        <table className="w-full min-w-[720px] text-left text-sm">
-                            <thead className="border-b bg-muted/50">
-                                <tr>
-                                    <th className="px-3 py-3 font-medium">
-                                        Processo
-                                    </th>
-                                    <th className="px-3 py-3 font-medium">
-                                        Estado
-                                    </th>
-                                    <th className="px-3 py-3 font-medium">
-                                        Iniciada por
-                                    </th>
-                                    <th className="px-3 py-3 text-right font-medium">
-                                        Acções
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {runs.length === 0 ? (
-                                    <tr>
-                                        <td
-                                            className="px-3 py-6 text-center text-muted-foreground"
-                                            colSpan={4}
-                                        >
-                                            Ainda não há execuções listadas.
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    runs.map((run) => (
-                                        <tr
-                                            key={run.id}
-                                            className="border-b border-sidebar-border/50 last:border-0"
-                                        >
-                                            <td className="px-3 py-3 align-top">
-                                                <div className="font-medium">
-                                                    {run.workflow_name}
-                                                </div>
-                                                {run.error_message ? (
-                                                    <div className="mt-1 max-w-md text-xs text-destructive">
-                                                        {run.error_message}
-                                                    </div>
-                                                ) : null}
-                                            </td>
-                                            <td className="px-3 py-3 align-top text-muted-foreground">
-                                                {run.status_label}
-                                            </td>
-                                            <td className="px-3 py-3 align-top text-muted-foreground">
-                                                {run.iniciada_por_label}
-                                            </td>
-                                            <td className="px-3 py-3 text-right align-top">
-                                                {run.resume_url ? (
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        asChild
-                                                    >
-                                                        <Link
-                                                            href={
-                                                                run.resume_url
-                                                            }
-                                                        >
-                                                            Continuar
-                                                        </Link>
-                                                    </Button>
-                                                ) : null}
-                                                {run.view_url ? (
-                                                    <Button
-                                                        variant="secondary"
-                                                        size="sm"
-                                                        className={
-                                                            run.resume_url
-                                                                ? 'ml-2'
-                                                                : ''
-                                                        }
-                                                        asChild
-                                                    >
-                                                        <Link
-                                                            href={run.view_url}
-                                                        >
-                                                            Ver resumo
-                                                        </Link>
-                                                    </Button>
-                                                ) : null}
-                                                {!run.resume_url &&
-                                                !run.view_url ? (
-                                                    <span className="text-xs text-muted-foreground">
-                                                        —
-                                                    </span>
-                                                ) : null}
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
+                    <RecentExecutionsAudit
+                        runs={runs}
+                        isOrgWide={Boolean(auth.user?.is_admin)}
+                    />
                 </section>
             </div>
         </AppLayout>
