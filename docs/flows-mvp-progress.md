@@ -2,6 +2,8 @@
 
 Plano de referência: `.cursor/plans/prd_fluxos_genéricos_93e08105.plan.md` (ou cópia local em Cursor).
 
+**Guia de uso (novidades implementadas):** [Catálogo de processos](./getting-started/process-catalog.md) · [Índice `docs/`](./README.md).
+
 **Comandos no ambiente de desenvolvimento:** usar **`./vendor/bin/sail`** para Artisan, testes e Composer (ver `.cursor/rules/laravel-sail.mdc`), com os contentores Docker a correr.
 
 **Última actualização:** 2026-04-18
