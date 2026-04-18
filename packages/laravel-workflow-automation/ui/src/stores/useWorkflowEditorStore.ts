@@ -93,7 +93,7 @@ export const useWorkflowEditorStore = create<WorkflowEditorStore>((set, get) => 
     if (!wf) return
     const res = await nodesApi.create(wf.id, {
       node_key: nodeKey,
-      label: registryNode.label,
+      name: registryNode.label,
       position_x: Math.round(position.x),
       position_y: Math.round(position.y),
     })
@@ -144,7 +144,7 @@ export const useWorkflowEditorStore = create<WorkflowEditorStore>((set, get) => 
   updateNodeLabel: async (nodeId, label) => {
     const wf = get().workflow
     if (!wf) return
-    const res = await nodesApi.update(wf.id, nodeId, { label })
+    const res = await nodesApi.update(wf.id, nodeId, { name: label })
     set({
       rfNodes: get().rfNodes.map((n) => {
         if (n.id === String(nodeId)) {

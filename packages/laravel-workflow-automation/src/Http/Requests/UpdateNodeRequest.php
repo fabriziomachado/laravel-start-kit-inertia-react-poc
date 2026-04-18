@@ -13,6 +13,14 @@ final class UpdateNodeRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        $label = $this->input('label');
+        if (is_string($label) && $label !== '' && ! $this->filled('name')) {
+            $this->merge(['name' => $label]);
+        }
+    }
+
     public function rules(): array
     {
         return [

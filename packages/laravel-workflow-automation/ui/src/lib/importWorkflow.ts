@@ -126,7 +126,7 @@ export async function importWorkflow(
     const node = data.nodes[i]
     const created = await nodesApi.create(wfId, {
       node_key: node.node_key,
-      label: node.name ?? undefined,
+      name: node.name ?? undefined,
       config: node.config ?? undefined,
       position_x: node.position_x ?? undefined,
       position_y: node.position_y ?? undefined,

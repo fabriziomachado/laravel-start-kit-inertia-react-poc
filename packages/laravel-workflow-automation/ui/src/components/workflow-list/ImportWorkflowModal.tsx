@@ -30,6 +30,7 @@ export function ImportWorkflowModal({
   const [parseError, setParseError] = useState<string | null>(null)
   const [isImporting, setIsImporting] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
+  const [pasteJson, setPasteJson] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const errors = issues.filter((i) => i.type === 'error')
@@ -47,39 +48,51 @@ export function ImportWorkflowModal({
     [registryNodes, existingWorkflows],
   )
 
-  const handleFileChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0]
-      if (!file) return
+  const applyExportedJson = useCallback(
+    (raw: string) => {
+      const trimmed = raw.trim()
+      if (!trimmed) {
+        setParseError('Paste exported JSON or choose a file.')
+        return
+      }
 
       setParseError(null)
       setImportError(null)
       setIssues([])
       setParsedData(null)
 
+      try {
+        const json = JSON.parse(trimmed) as unknown
+        const structIssues = validateWorkflowJson(json)
+        if (structIssues.some((i) => i.type === 'error')) {
+          setIssues(structIssues)
+          return
+        }
+
+        const data = json as ExportedWorkflow
+        setParsedData(data)
+        setImportName(data.name)
+        runValidation(data, data.name)
+      } catch {
+        setParseError('Invalid JSON. Use a valid exported .workflow.json or .workflow file.')
+      }
+    },
+    [runValidation],
+  )
+
+  const handleFileChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0]
+      if (!file) return
+
+      setPasteJson('')
       const reader = new FileReader()
       reader.onload = () => {
-        try {
-          const json = JSON.parse(reader.result as string)
-
-          // Structural validation
-          const structIssues = validateWorkflowJson(json)
-          if (structIssues.some((i) => i.type === 'error')) {
-            setIssues(structIssues)
-            return
-          }
-
-          const data = json as ExportedWorkflow
-          setParsedData(data)
-          setImportName(data.name)
-          runValidation(data, data.name)
-        } catch {
-          setParseError('Invalid JSON file. Please select a valid .workflow.json file.')
-        }
+        applyExportedJson(reader.result as string)
       }
       reader.readAsText(file)
     },
-    [runValidation],
+    [applyExportedJson],
   )
 
   // Re-validate when name changes
@@ -110,7 +123,7 @@ export function ImportWorkflowModal({
       <div className="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800 dark:shadow-2xl dark:shadow-black/40">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Import Workflow</h2>
         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-          Select a .workflow.json file exported from this system.
+          Select an exported file (.workflow.json or .workflow) or paste JSON below.
         </p>
 
         {/* File Input */}
@@ -127,10 +140,33 @@ export function ImportWorkflowModal({
           <input
             ref={fileInputRef}
             type="file"
-            accept=".json"
+            accept=".json,.workflow,application/json"
             onChange={handleFileChange}
             className="hidden"
           />
+        </div>
+
+        <div className="mt-4 space-y-2">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300" htmlFor="import-paste-json">
+            Or paste exported JSON
+          </label>
+          <textarea
+            id="import-paste-json"
+            aria-label="Exported workflow JSON"
+            value={pasteJson}
+            onChange={(e) => setPasteJson(e.target.value)}
+            rows={5}
+            spellCheck={false}
+            className="w-full resize-y rounded-md border border-gray-300 px-3 py-2 font-mono text-xs text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
+            placeholder='{"name":"…","nodes":[],"edges":[]}'
+          />
+          <button
+            type="button"
+            onClick={() => applyExportedJson(pasteJson)}
+            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
+          >
+            Apply pasted JSON
+          </button>
         </div>
 
         {/* Parse Error */}

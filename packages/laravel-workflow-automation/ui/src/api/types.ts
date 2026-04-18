@@ -239,14 +239,14 @@ export interface UpdateWorkflowPayload {
 
 export interface CreateNodePayload {
   node_key: string
-  label?: string
+  name?: string
   config?: Record<string, unknown>
   position_x?: number
   position_y?: number
 }
 
 export interface UpdateNodePayload {
-  label?: string
+  name?: string
   config?: Record<string, unknown>
 }
 
