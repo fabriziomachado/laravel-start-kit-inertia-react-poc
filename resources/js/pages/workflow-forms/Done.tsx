@@ -18,8 +18,10 @@ export default function WorkflowFormDone({ run_id }: Props) {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Formulário concluído" />
             <div className="mx-auto max-w-lg space-y-4 p-4">
-                <h1 className="text-2xl font-semibold tracking-tight">Formulário concluído</h1>
-                <p className="text-muted-foreground text-sm">
+                <h1 className="text-2xl font-semibold tracking-tight">
+                    Formulário concluído
+                </h1>
+                <p className="text-sm text-muted-foreground">
                     A execução do workflow #{run_id} foi concluída.
                 </p>
                 <Button asChild variant="secondary">

@@ -1,8 +1,8 @@
 import { router, usePage } from '@inertiajs/react';
 import { LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { leave } from '@/routes/impersonate';
 import { cn } from '@/lib/utils';
+import { leave } from '@/routes/impersonate';
 import type { SharedData } from '@/types';
 
 export function ImpersonatingBanner() {
@@ -30,7 +30,7 @@ export function ImpersonatingBanner() {
                     type="button"
                     variant="secondary"
                     size="sm"
-                    className="absolute right-1 top-1/2 h-7 -translate-y-1/2 gap-1 border-amber-800/15 bg-white/90 px-2 text-xs text-amber-950 shadow-sm hover:bg-white dark:border-amber-200/15 dark:bg-amber-950/50 dark:text-amber-50 dark:hover:bg-amber-900/60 sm:right-2"
+                    className="absolute top-1/2 right-1 h-7 -translate-y-1/2 gap-1 border-amber-800/15 bg-white/90 px-2 text-xs text-amber-950 shadow-sm hover:bg-white sm:right-2 dark:border-amber-200/15 dark:bg-amber-950/50 dark:text-amber-50 dark:hover:bg-amber-900/60"
                     data-test="impersonating-leave"
                     onClick={() => {
                         router.get(leave.url());

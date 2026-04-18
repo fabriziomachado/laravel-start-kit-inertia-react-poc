@@ -9,8 +9,8 @@ import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import AuthLayout from '@/layouts/auth-layout';
 import { register } from '@/routes';
-import { index as otpzIndex } from '@/routes/otpz';
 import { store } from '@/routes/login';
+import { index as otpzIndex } from '@/routes/otpz';
 import { request } from '@/routes/password';
 
 type Props = {

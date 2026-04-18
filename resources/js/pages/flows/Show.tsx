@@ -37,7 +37,7 @@ export default function FlowsShow({
                     <h1 className="text-2xl font-semibold tracking-tight">
                         {workflow_name}
                     </h1>
-                    <p className="text-muted-foreground mt-1 text-sm">
+                    <p className="mt-1 text-sm text-muted-foreground">
                         Execução #{run_id} · Iniciada por {iniciada_por_label}
                         {finished_at ? (
                             <>
@@ -58,7 +58,7 @@ export default function FlowsShow({
                                 </CardTitle>
                             </CardHeader>
                             <CardContent>
-                                <ul className="text-muted-foreground list-inside list-disc space-y-1 text-sm">
+                                <ul className="list-inside list-disc space-y-1 text-sm text-muted-foreground">
                                     {section.lines.map((line) => (
                                         <li key={line}>{line}</li>
                                     ))}

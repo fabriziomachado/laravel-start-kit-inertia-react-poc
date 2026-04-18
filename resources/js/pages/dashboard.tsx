@@ -1,6 +1,6 @@
 import { Head, usePage } from '@inertiajs/react';
-import { PlaceholderPattern } from '@/components/ui/placeholder-pattern';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { PlaceholderPattern } from '@/components/ui/placeholder-pattern';
 import AppLayout from '@/layouts/app-layout';
 import { dashboard } from '@/routes';
 import type { BreadcrumbItem, SharedData } from '@/types';

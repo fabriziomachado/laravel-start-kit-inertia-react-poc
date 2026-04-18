@@ -78,7 +78,7 @@ export default function FlowsIndex({
                     <h1 className="text-2xl font-semibold tracking-tight">
                         Processos
                     </h1>
-                    <p className="text-muted-foreground text-sm">
+                    <p className="text-sm text-muted-foreground">
                         Escolha um fluxo para iniciar ou consulte as execuções
                         recentes.
                     </p>
@@ -107,7 +107,7 @@ export default function FlowsIndex({
                                 <CardHeader className="pb-2">
                                     <div className="flex items-start gap-2">
                                         <GitBranch
-                                            className="text-muted-foreground mt-0.5 size-5 shrink-0"
+                                            className="mt-0.5 size-5 shrink-0 text-muted-foreground"
                                             aria-hidden
                                         />
                                         <div className="min-w-0">
@@ -145,7 +145,7 @@ export default function FlowsIndex({
                     </h2>
                     <div className="overflow-x-auto rounded-lg border border-sidebar-border/70 dark:border-sidebar-border">
                         <table className="w-full min-w-[720px] text-left text-sm">
-                            <thead className="bg-muted/50 border-b">
+                            <thead className="border-b bg-muted/50">
                                 <tr>
                                     <th className="px-3 py-3 font-medium">
                                         Processo
@@ -156,7 +156,7 @@ export default function FlowsIndex({
                                     <th className="px-3 py-3 font-medium">
                                         Iniciada por
                                     </th>
-                                    <th className="px-3 py-3 font-medium text-right">
+                                    <th className="px-3 py-3 text-right font-medium">
                                         Acções
                                     </th>
                                 </tr>
@@ -165,7 +165,7 @@ export default function FlowsIndex({
                                 {runs.length === 0 ? (
                                     <tr>
                                         <td
-                                            className="text-muted-foreground px-3 py-6 text-center"
+                                            className="px-3 py-6 text-center text-muted-foreground"
                                             colSpan={4}
                                         >
                                             Ainda não há execuções listadas.
@@ -182,15 +182,15 @@ export default function FlowsIndex({
                                                     {run.workflow_name}
                                                 </div>
                                                 {run.error_message ? (
-                                                    <div className="text-destructive mt-1 max-w-md text-xs">
+                                                    <div className="mt-1 max-w-md text-xs text-destructive">
                                                         {run.error_message}
                                                     </div>
                                                 ) : null}
                                             </td>
-                                            <td className="text-muted-foreground px-3 py-3 align-top">
+                                            <td className="px-3 py-3 align-top text-muted-foreground">
                                                 {run.status_label}
                                             </td>
-                                            <td className="text-muted-foreground px-3 py-3 align-top">
+                                            <td className="px-3 py-3 align-top text-muted-foreground">
                                                 {run.iniciada_por_label}
                                             </td>
                                             <td className="px-3 py-3 text-right align-top">
@@ -200,7 +200,11 @@ export default function FlowsIndex({
                                                         size="sm"
                                                         asChild
                                                     >
-                                                        <Link href={run.resume_url}>
+                                                        <Link
+                                                            href={
+                                                                run.resume_url
+                                                            }
+                                                        >
                                                             Continuar
                                                         </Link>
                                                     </Button>
@@ -216,14 +220,16 @@ export default function FlowsIndex({
                                                         }
                                                         asChild
                                                     >
-                                                        <Link href={run.view_url}>
+                                                        <Link
+                                                            href={run.view_url}
+                                                        >
                                                             Ver resumo
                                                         </Link>
                                                     </Button>
                                                 ) : null}
                                                 {!run.resume_url &&
                                                 !run.view_url ? (
-                                                    <span className="text-muted-foreground text-xs">
+                                                    <span className="text-xs text-muted-foreground">
                                                         —
                                                     </span>
                                                 ) : null}
