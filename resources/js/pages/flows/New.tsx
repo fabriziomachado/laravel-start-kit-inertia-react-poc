@@ -1253,64 +1253,93 @@ export default function FlowsNew({
                 <Card className="box-content overflow-hidden border-0 shadow-none">
                     <CardContent className="p-0">
                         <div className="px-6 pt-6">
-                            <div
-                                className="flex flex-wrap gap-8 border-b border-border"
-                                role="tablist"
-                                aria-label="Requerimentos — tipo de listagem"
-                            >
-                                <button
-                                    type="button"
-                                    role="tab"
-                                    aria-selected={activeTab === 'catalog'}
-                                    onClick={() => setActiveTab('catalog')}
-                                    className={cn(
-                                        'flex items-center gap-2 border-b-2 pb-3 text-sm transition-colors',
-                                        activeTab === 'catalog'
-                                            ? 'border-foreground font-semibold text-foreground'
-                                            : 'border-transparent font-medium text-muted-foreground hover:text-foreground',
-                                    )}
+                            <div className="flex flex-col gap-3 border-b border-border pb-0 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
+                                <div
+                                    className="flex min-w-0 flex-wrap gap-6 sm:gap-8"
+                                    role="tablist"
+                                    aria-label="Requerimentos — tipo de listagem"
                                 >
-                                    Novo requerimento
-                                    <span
+                                    <button
+                                        type="button"
+                                        role="tab"
+                                        aria-selected={activeTab === 'catalog'}
+                                        onClick={() => setActiveTab('catalog')}
                                         className={cn(
-                                            'inline-flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-xs font-semibold tabular-nums',
+                                            'flex items-center gap-2 border-b-2 pb-3 text-sm transition-colors',
                                             activeTab === 'catalog'
-                                                ? 'bg-foreground text-background'
-                                                : 'bg-muted text-muted-foreground',
+                                                ? 'border-foreground font-semibold text-foreground'
+                                                : 'border-transparent font-medium text-muted-foreground hover:text-foreground',
                                         )}
                                     >
-                                        {requirements.length}
-                                    </span>
-                                </button>
-                                <button
-                                    type="button"
-                                    role="tab"
-                                    aria-selected={activeTab === 'requested'}
-                                    onClick={() => setActiveTab('requested')}
-                                    className={cn(
-                                        'flex items-center gap-2 border-b-2 pb-3 text-sm transition-colors',
-                                        activeTab === 'requested'
-                                            ? 'border-foreground font-semibold text-foreground'
-                                            : 'border-transparent font-medium text-muted-foreground hover:text-foreground',
-                                    )}
-                                >
-                                    Requerimetnos do aluno
-                                    <span
-                                        className={cn(
-                                            'inline-flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-xs font-semibold tabular-nums',
+                                        Novo requerimento
+                                        <span
+                                            className={cn(
+                                                'inline-flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-xs font-semibold tabular-nums',
+                                                activeTab === 'catalog'
+                                                    ? 'bg-foreground text-background'
+                                                    : 'bg-muted text-muted-foreground',
+                                            )}
+                                        >
+                                            {requirements.length}
+                                        </span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        role="tab"
+                                        aria-selected={
                                             activeTab === 'requested'
-                                                ? 'bg-foreground text-background'
-                                                : 'bg-muted text-muted-foreground',
+                                        }
+                                        onClick={() =>
+                                            setActiveTab('requested')
+                                        }
+                                        className={cn(
+                                            'flex items-center gap-2 border-b-2 pb-3 text-sm transition-colors',
+                                            activeTab === 'requested'
+                                                ? 'border-foreground font-semibold text-foreground'
+                                                : 'border-transparent font-medium text-muted-foreground hover:text-foreground',
                                         )}
                                     >
-                                        {requestedProcesses.length}
-                                    </span>
-                                </button>
+                                        Requerimentos do aluno
+                                        <span
+                                            className={cn(
+                                                'inline-flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-xs font-semibold tabular-nums',
+                                                activeTab === 'requested'
+                                                    ? 'bg-foreground text-background'
+                                                    : 'bg-muted text-muted-foreground',
+                                            )}
+                                        >
+                                            {requestedProcesses.length}
+                                        </span>
+                                    </button>
+                                </div>
+                                {activeTab === 'catalog' ? (
+                                    <div className="relative w-full min-w-0 shrink-0 sm:max-w-xs sm:pb-2.5">
+                                        <label
+                                            htmlFor="flows-intake-service-filter"
+                                            className="sr-only"
+                                        >
+                                            Filtrar serviços
+                                        </label>
+                                        <Search
+                                            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                                            aria-hidden
+                                        />
+                                        <Input
+                                            id="flows-intake-service-filter"
+                                            value={filterText}
+                                            onChange={(e) =>
+                                                setFilterText(e.target.value)
+                                            }
+                                            placeholder="Filtrar serviços…"
+                                            className="h-9 border-border/80 bg-background pl-9 shadow-none"
+                                        />
+                                    </div>
+                                ) : null}
                             </div>
                         </div>
 
                         {activeTab === 'catalog' ? (
-                            <div className="flex flex-col gap-3 border-b border-border/80 bg-muted/25 px-6 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                            <div className="border-b border-border/80 bg-muted/25 px-6 py-3 sm:py-3.5">
                                 <div
                                     className="flex flex-wrap gap-2"
                                     role="group"
@@ -1337,20 +1366,6 @@ export default function FlowsNew({
                                             </button>
                                         );
                                     })}
-                                </div>
-                                <div className="relative w-full sm:max-w-xs sm:shrink-0">
-                                    <Search
-                                        className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-                                        aria-hidden
-                                    />
-                                    <Input
-                                        value={filterText}
-                                        onChange={(e) =>
-                                            setFilterText(e.target.value)
-                                        }
-                                        placeholder="Filtrar serviços…"
-                                        className="h-9 border-border/80 bg-background pl-9 shadow-none"
-                                    />
                                 </div>
                             </div>
                         ) : null}
