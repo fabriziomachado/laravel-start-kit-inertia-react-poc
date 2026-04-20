@@ -1,11 +1,26 @@
 import { Head, router } from '@inertiajs/react';
-import { ExternalLink, LoaderCircle, Search } from 'lucide-react';
+import {
+    AlertTriangle,
+    Banknote,
+    ChevronDown,
+    ExternalLink,
+    Info,
+    LoaderCircle,
+    Search,
+    UserSearch,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+    Collapsible,
+    CollapsibleContent,
+    CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import {
     Sheet,
     SheetContent,
@@ -15,6 +30,7 @@ import {
     SheetTitle,
 } from '@/components/ui/sheet';
 import AppLayout from '@/layouts/app-layout';
+import { cn } from '@/lib/utils';
 import { dashboard } from '@/routes';
 import { index as flowsIndex, intake as flowsIntake } from '@/routes/flows';
 import { store as flowsRunsStore } from '@/routes/flows/runs';
@@ -38,6 +54,60 @@ type Requirement = {
     group: string;
 };
 
+type CatalogCategoryPill =
+    | 'all'
+    | 'popular'
+    | 'academic'
+    | 'financial'
+    | 'scholarship';
+
+function requirementHaystack(r: Requirement): string {
+    return `${r.title} ${r.description ?? ''} ${r.tags.join(' ')} ${r.group}`.toLowerCase();
+}
+
+function requirementMatchesCatalogPill(
+    r: Requirement,
+    pill: CatalogCategoryPill,
+    popularIds: readonly number[],
+): boolean {
+    if (pill === 'all') {
+        return true;
+    }
+    if (pill === 'popular') {
+        return new Set(popularIds).has(r.id);
+    }
+
+    const h = requirementHaystack(r);
+    if (pill === 'academic') {
+        return (
+            h.includes('acad') ||
+            h.includes('disciplin') ||
+            h.includes('matrí') ||
+            h.includes('matri') ||
+            h.includes('tranc') ||
+            h.includes('aproveit') ||
+            h.includes('curri') ||
+            h.includes('gradua')
+        );
+    }
+    if (pill === 'financial') {
+        return (
+            h.includes('finan') ||
+            h.includes('débit') ||
+            h.includes('debit') ||
+            h.includes('taxa') ||
+            h.includes('pagamento') ||
+            h.includes('divida') ||
+            h.includes('dívida')
+        );
+    }
+    if (pill === 'scholarship') {
+        return h.includes('bolsa') || h.includes('scholar');
+    }
+
+    return true;
+}
+
 type RequestedProcess = {
     id: string;
     title: string;
@@ -55,6 +125,7 @@ type Student = {
     semester: string;
     unit: string;
     avatar_url: string | null;
+    cpf?: string | null;
 };
 
 type Pendency = {
@@ -85,6 +156,14 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 const RECENT_REQUIREMENTS_KEY = 'flows.intake.recentRequirements.v1';
+
+const CATALOG_PILL_OPTIONS: { id: CatalogCategoryPill; label: string }[] = [
+    { id: 'all', label: 'Todos' },
+    { id: 'popular', label: 'Mais utilizados' },
+    { id: 'academic', label: 'Académico' },
+    { id: 'financial', label: 'Financeiro' },
+    { id: 'scholarship', label: 'Bolsas' },
+];
 
 function getCsrfToken(): string {
     return (
@@ -118,6 +197,28 @@ function writeRecentRequirementIds(ids: number[]) {
     localStorage.setItem(RECENT_REQUIREMENTS_KEY, JSON.stringify(ids));
 }
 
+function formatBrl(amount: number): string {
+    return new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL',
+    }).format(amount);
+}
+
+function studentInitials(name: string): string {
+    const parts = name
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+    if (parts.length === 0) {
+        return '?';
+    }
+    if (parts.length === 1) {
+        return parts[0].slice(0, 2).toUpperCase();
+    }
+
+    return `${parts[0][0] ?? ''}${parts[parts.length - 1][0] ?? ''}`.toUpperCase();
+}
+
 export default function FlowsNew({
     query,
     requirements,
@@ -131,6 +232,8 @@ export default function FlowsNew({
     );
     const [overrideStatus, setOverrideStatus] = useState<OverrideStatus>('none');
     const [negotiationOpen, setNegotiationOpen] = useState(false);
+    const [selectedNegotiationId, setSelectedNegotiationId] =
+        useState<string>('cash-10');
     const [isGeneratingArtifacts, setIsGeneratingArtifacts] = useState(false);
     const [artifacts, setArtifacts] = useState<NegotiationArtifacts | null>(
         null,
@@ -141,6 +244,8 @@ export default function FlowsNew({
         'catalog',
     );
     const [filterText, setFilterText] = useState('');
+    const [catalogPill, setCatalogPill] =
+        useState<CatalogCategoryPill>('all');
     const [selectedRequirementId, setSelectedRequirementId] = useState<
         number | null
     >(null);
@@ -203,6 +308,12 @@ export default function FlowsNew({
         void runSearch(query);
     }, [query, runSearch]);
 
+    useEffect(() => {
+        if (negotiationOpen) {
+            setSelectedNegotiationId('cash-10');
+        }
+    }, [negotiationOpen]);
+
     const hasStudent = searchResult?.student !== null && searchResult !== null;
     const pendencies = searchResult?.pendencies ?? [];
     const financialPendency = pendencies.find((p) => p.type === 'financial');
@@ -212,6 +323,41 @@ export default function FlowsNew({
     const hasBlockingFinancialPendency = Boolean(financialPendency) && !financialResolved;
     const hasBlockingPendency =
         hasBlockingNonFinancialPendency || hasBlockingFinancialPendency;
+
+    const pendencyBannerTitle = useMemo(() => {
+        if (
+            financialPendency &&
+            typeof financialPendency.amount === 'number'
+        ) {
+            return `Pendência financeira detetada: ${formatBrl(financialPendency.amount)}`;
+        }
+        if (financialPendency) {
+            return 'Pendência financeira detetada';
+        }
+        if (
+            pendencies.length === 1 &&
+            pendencies[0]?.type === 'academic'
+        ) {
+            return 'Pendência académica detetada';
+        }
+
+        return 'Pendências detetadas';
+    }, [financialPendency, pendencies]);
+
+    const pendencyBannerSubtitle = useMemo(() => {
+        if (hasBlockingFinancialPendency && financialPendency) {
+            return 'Regularize para habilitar novos requerimentos.';
+        }
+        if (hasBlockingNonFinancialPendency) {
+            return 'Regularize a documentação ou solicite autorização para continuar.';
+        }
+
+        return 'Consulte os detalhes abaixo quando necessário.';
+    }, [
+        financialPendency,
+        hasBlockingFinancialPendency,
+        hasBlockingNonFinancialPendency,
+    ]);
 
     const requestOverride = useCallback(async () => {
         const studentId = searchResult?.student?.id;
@@ -309,26 +455,51 @@ export default function FlowsNew({
         return `/students/${studentId}`;
     }, [searchResult?.student?.id]);
 
-    const negotiationOptions = useMemo(
-        () => [
+    const negotiationDebtTotal = useMemo(() => {
+        if (
+            financialPendency &&
+            typeof financialPendency.amount === 'number'
+        ) {
+            return financialPendency.amount;
+        }
+
+        return 1250;
+    }, [financialPendency]);
+
+    const negotiationPlans = useMemo(() => {
+        const total = negotiationDebtTotal;
+        const cashTotal = Math.round(total * 0.9 * 100) / 100;
+        const savings = Math.round((total - cashTotal) * 100) / 100;
+        const per3 = Math.round((total / 3) * 100) / 100;
+        const per6 = Math.round((total / 6) * 100) / 100;
+
+        return [
             {
                 id: 'cash-10',
-                label: 'À vista (10% desc.)',
-                note: 'Recomendado',
+                title: 'À vista (10% desc.)',
+                amountLine: formatBrl(cashTotal),
+                footer: `Economia de ${formatBrl(savings)} no pagamento único.`,
+                highlight: null as string | null,
+                recommended: true,
             },
             {
                 id: '3x',
-                label: 'Parcelado em 3x',
-                note: 'Sem juros',
+                title: 'Parcelado em 3x',
+                amountLine: `3x ${formatBrl(per3)}`,
+                footer: `Valor total de ${formatBrl(total)}.`,
+                highlight: 'Sem juros',
+                recommended: false,
             },
             {
                 id: '6x',
-                label: 'Parcelado em 6x',
-                note: 'Com taxas',
+                title: 'Parcelado em 6x',
+                amountLine: `6x ${formatBrl(per6)}`,
+                footer: 'Inclui taxas administrativas de parcelamento.',
+                highlight: null as string | null,
+                recommended: false,
             },
-        ],
-        [],
-    );
+        ];
+    }, [negotiationDebtTotal]);
 
     const visibleRequirements = useMemo(() => {
         const t = filterText.trim().toLowerCase();
@@ -342,10 +513,24 @@ export default function FlowsNew({
         });
     }, [filterText, requirements]);
 
+    const pillFilteredRequirements = useMemo(
+        () =>
+            visibleRequirements.filter((r) =>
+                requirementMatchesCatalogPill(
+                    r,
+                    catalogPill,
+                    popularRequirementIds,
+                ),
+            ),
+        [catalogPill, popularRequirementIds, visibleRequirements],
+    );
+
     const popularRequirements = useMemo(() => {
         const popularSet = new Set(popularRequirementIds);
-        return visibleRequirements.filter((r) => popularSet.has(r.id)).slice(0, 6);
-    }, [popularRequirementIds, visibleRequirements]);
+        return pillFilteredRequirements
+            .filter((r) => popularSet.has(r.id))
+            .slice(0, 6);
+    }, [pillFilteredRequirements, popularRequirementIds]);
 
     const recentRequirements = useMemo(() => {
         const ids = readRecentRequirementIds();
@@ -354,7 +539,9 @@ export default function FlowsNew({
         }
 
         const popularIds = new Set(popularRequirements.map((r) => r.id));
-        const index = new Map(visibleRequirements.map((r) => [r.id, r]));
+        const index = new Map(
+            pillFilteredRequirements.map((r) => [r.id, r]),
+        );
 
         const out: Requirement[] = [];
         for (const id of ids) {
@@ -369,7 +556,7 @@ export default function FlowsNew({
         }
 
         return out;
-    }, [popularRequirements, visibleRequirements]);
+    }, [pillFilteredRequirements, popularRequirements]);
 
     const catalogRequirements = useMemo(() => {
         const used = new Set<number>([
@@ -377,8 +564,8 @@ export default function FlowsNew({
             ...recentRequirements.map((r) => r.id),
         ]);
 
-        return visibleRequirements.filter((r) => !used.has(r.id));
-    }, [popularRequirements, recentRequirements, visibleRequirements]);
+        return pillFilteredRequirements.filter((r) => !used.has(r.id));
+    }, [pillFilteredRequirements, popularRequirements, recentRequirements]);
 
     const selectRequirement = useCallback((id: number) => {
         setSelectedRequirementId(id);
@@ -419,23 +606,40 @@ export default function FlowsNew({
                         Abertura de processo
                     </h1>
                     <p className="text-sm text-muted-foreground">
-                        Consulte o aluno e selecione o requerimento para iniciar.
+                        {hasStudent
+                            ? 'Selecione o requerimento e inicie o processo para este aluno.'
+                            : 'Comece por localizar o aluno. Os requerimentos ficam disponíveis na etapa seguinte.'}
                     </p>
                 </div>
 
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-base">
+                <Card
+                    className={cn(
+                        'gap-4',
+                        !hasStudent &&
+                            'box-content max-w-full border-0 bg-accent text-accent-foreground shadow-sm [&_.text-muted-foreground]:text-accent-foreground/75 [&_[data-slot=card-title]]:font-normal [&_[data-slot=card-title]]:text-accent-foreground/55',
+                    )}
+                >
+                    <CardHeader className="space-y-0 px-6 pb-0 pt-6">
+                        <CardTitle className="text-[0.65rem] font-normal uppercase tracking-[0.2em] text-muted-foreground/65">
                             Pesquisa de estudante
                         </CardTitle>
                     </CardHeader>
-                    <CardContent>
-                        <div className="flex flex-col gap-3 sm:flex-row">
-                            <div className="flex-1">
+                    <CardContent className="space-y-2 px-6 pb-6 pt-2">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
+                            <div className="relative min-w-0 flex-1">
+                                <UserSearch
+                                    className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                                    aria-hidden
+                                />
                                 <Input
                                     value={q}
                                     onChange={(e) => setQ(e.target.value)}
-                                    placeholder="Código, nome ou email…"
+                                    placeholder="Código, nome, email ou CPF…"
+                                    className={cn(
+                                        'h-10 pl-9 shadow-xs',
+                                        !hasStudent &&
+                                            'border-border bg-background text-foreground',
+                                    )}
                                     onKeyDown={(e) => {
                                         if (e.key === 'Enter') {
                                             submit();
@@ -445,15 +649,44 @@ export default function FlowsNew({
                             </div>
                             <Button
                                 type="button"
+                                className="h-10 shrink-0 px-5"
                                 disabled={!canSearch}
                                 onClick={submit}
                             >
-                                <Search className="mr-2 size-4" aria-hidden />
                                 Consultar
                             </Button>
                         </div>
-                        <p className="mt-2 text-xs text-muted-foreground">
-                            Digite pelo menos 3 caracteres para consultar.
+                        <p className="text-xs leading-relaxed text-muted-foreground">
+                            Digite pelo menos 3 caracteres para consultar. Exemplos
+                            de demonstração:{' '}
+                            <span className="font-medium text-foreground/80">
+                                maria
+                            </span>{' '}
+                            ou{' '}
+                            <span className="font-medium text-foreground/80">
+                                20240001
+                            </span>{' '}
+                            (sem pendências); inclua{' '}
+                            <span className="font-medium text-foreground/80">
+                                fin
+                            </span>
+                            ,{' '}
+                            <span className="font-medium text-foreground/80">
+                                deb
+                            </span>{' '}
+                            ou{' '}
+                            <span className="font-medium text-foreground/80">
+                                div
+                            </span>{' '}
+                            para simular dívida;{' '}
+                            <span className="font-medium text-foreground/80">
+                                acad
+                            </span>{' '}
+                            ou{' '}
+                            <span className="font-medium text-foreground/80">
+                                doc
+                            </span>{' '}
+                            para pendência académica.
                         </p>
                     </CardContent>
                 </Card>
@@ -469,178 +702,421 @@ export default function FlowsNew({
                 ) : null}
 
                 {hasStudent ? (
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <div className="flex items-start justify-between gap-4">
-                                <div className="min-w-0">
-                                    <CardTitle className="text-base">
-                                        {searchResult.student.name}
-                                    </CardTitle>
-                                    <p className="mt-1 text-sm text-muted-foreground">
-                                        Matrícula {searchResult.student.code} ·{' '}
-                                        {searchResult.student.course} ·{' '}
-                                        {searchResult.student.semester} ·{' '}
-                                        {searchResult.student.unit}
-                                    </p>
+                    <Card className="overflow-hidden shadow-sm">
+                        <CardContent className="p-4 sm:p-6">
+                            <div className="flex flex-col gap-6 sm:flex-row sm:items-stretch">
+                                <div className="shrink-0 self-start">
+                                    <Avatar className="size-24 rounded-xl">
+                                        <AvatarImage
+                                            src={
+                                                searchResult.student
+                                                    .avatar_url ?? undefined
+                                            }
+                                            alt=""
+                                        />
+                                        <AvatarFallback className="rounded-xl text-lg font-semibold">
+                                            {studentInitials(
+                                                searchResult.student.name,
+                                            )}
+                                        </AvatarFallback>
+                                    </Avatar>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    <Badge variant="secondary">
-                                        {searchResult.student.status}
-                                    </Badge>
-                                    {dossierUrl ? (
-                                        <Button variant="outline" asChild>
-                                            <a
-                                                href={dossierUrl}
-                                                target="_blank"
-                                                rel="noreferrer"
+
+                                <div className="min-w-0 flex-1 space-y-4">
+                                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                        <div className="min-w-0 space-y-3">
+                                            <h2 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+                                                {searchResult.student.name}
+                                            </h2>
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                {financialPendency &&
+                                                typeof financialPendency.amount ===
+                                                    'number' ? (
+                                                    <Badge
+                                                        variant="destructive"
+                                                        className="max-w-full font-medium"
+                                                    >
+                                                        <Banknote
+                                                            className="shrink-0"
+                                                            aria-hidden
+                                                        />
+                                                        <span className="truncate">
+                                                            Dívida:{' '}
+                                                            {formatBrl(
+                                                                financialPendency.amount,
+                                                            )}
+                                                        </span>
+                                                    </Badge>
+                                                ) : financialPendency ? (
+                                                    <Badge variant="destructive">
+                                                        <Banknote
+                                                            className="shrink-0"
+                                                            aria-hidden
+                                                        />
+                                                        Pendência financeira
+                                                    </Badge>
+                                                ) : null}
+                                                <Badge
+                                                    variant="outline"
+                                                    className={cn(
+                                                        'border font-medium',
+                                                        /ativo/i.test(
+                                                            searchResult.student
+                                                                .status,
+                                                        )
+                                                            ? 'border-chart-2/35 bg-chart-2/10 text-chart-2'
+                                                            : 'border-border bg-muted/40 text-foreground',
+                                                    )}
+                                                >
+                                                    {searchResult.student.status}
+                                                </Badge>
+                                            </div>
+                                        </div>
+                                        {dossierUrl ? (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="shrink-0 self-start"
+                                                asChild
                                             >
-                                                <ExternalLink
-                                                    className="mr-2 size-4"
-                                                    aria-hidden
-                                                />
-                                                Ver dossiê completo
-                                            </a>
-                                        </Button>
-                                    ) : null}
+                                                <a
+                                                    href={dossierUrl}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                >
+                                                    Abrir ficha completa
+                                                    <ExternalLink
+                                                        className="ml-2 size-4"
+                                                        aria-hidden
+                                                    />
+                                                </a>
+                                            </Button>
+                                        ) : null}
+                                    </div>
+
+                                    <div
+                                        className={cn(
+                                            'rounded-lg border border-border/70 bg-muted/25 px-4 py-3 sm:px-5',
+                                            searchResult.student.cpf
+                                                ? 'grid gap-4 sm:grid-cols-2 sm:gap-x-10'
+                                                : 'max-w-md',
+                                        )}
+                                    >
+                                        <div className="min-w-0 space-y-1">
+                                            <p className="text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground">
+                                                Matrícula
+                                            </p>
+                                            <p className="font-mono text-sm font-medium tabular-nums tracking-tight text-foreground">
+                                                {
+                                                    searchResult.student
+                                                        .code
+                                                }
+                                            </p>
+                                        </div>
+                                        {searchResult.student.cpf ? (
+                                            <div className="min-w-0 space-y-1 sm:border-l sm:border-border/60 sm:pl-10">
+                                                <p className="text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground">
+                                                    CPF
+                                                </p>
+                                                <p className="font-mono text-sm font-medium tabular-nums tracking-tight text-foreground">
+                                                    {
+                                                        searchResult.student
+                                                            .cpf
+                                                    }
+                                                </p>
+                                            </div>
+                                        ) : null}
+                                    </div>
+
+                                    <div className="grid gap-5 sm:grid-cols-3">
+                                        <div className="space-y-1">
+                                            <p className="text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground">
+                                                Curso matriculado
+                                            </p>
+                                            <p className="text-sm font-semibold text-foreground">
+                                                {searchResult.student.course}
+                                            </p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground">
+                                                Período atual
+                                            </p>
+                                            <p className="text-sm font-semibold text-foreground">
+                                                {searchResult.student.semester}
+                                            </p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground">
+                                                Unidade
+                                            </p>
+                                            <p className="text-sm font-semibold text-foreground">
+                                                {searchResult.student.unit}
+                                            </p>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                        </CardHeader>
+                        </CardContent>
                     </Card>
                 ) : null}
 
                 {hasStudent && pendencies.length > 0 ? (
-                    <Alert
-                        variant={hasBlockingPendency ? 'destructive' : 'default'}
-                    >
-                        <AlertTitle>Pendências</AlertTitle>
-                        <AlertDescription>
-                            <div className="space-y-2">
-                                <ul className="list-inside list-disc">
-                                    {pendencies.map((p) => (
-                                        <li key={p.id}>{p.summary}</li>
-                                    ))}
-                                </ul>
+                    <Collapsible defaultOpen={false}>
+                        <div
+                            className={cn(
+                                'rounded-xl border px-4 py-4 shadow-sm',
+                                'border-amber-200/90 bg-amber-50/95 text-amber-950',
+                                'dark:border-amber-800/55 dark:bg-amber-950/35 dark:text-amber-50',
+                                hasBlockingPendency &&
+                                    'ring-1 ring-amber-300/40 dark:ring-amber-700/30',
+                            )}
+                        >
+                            <div className="flex items-start gap-3">
+                                <div
+                                    className={cn(
+                                        'flex size-10 shrink-0 items-center justify-center rounded-full',
+                                        'bg-amber-100/90 dark:bg-amber-900/50',
+                                    )}
+                                    aria-hidden
+                                >
+                                    <AlertTriangle
+                                        className="size-5 text-amber-800 dark:text-amber-200"
+                                        strokeWidth={2}
+                                    />
+                                </div>
+                                <div className="min-w-0 flex-1 space-y-1 pr-1">
+                                    <h3 className="text-base font-semibold leading-snug tracking-tight text-amber-950 dark:text-amber-50">
+                                        {pendencyBannerTitle}
+                                    </h3>
+                                    <p className="text-sm leading-relaxed text-amber-900/75 dark:text-amber-100/80">
+                                        {pendencyBannerSubtitle}
+                                    </p>
+                                </div>
+                                <CollapsibleTrigger asChild>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className={cn(
+                                            'size-9 shrink-0 text-amber-900/70 hover:bg-amber-100/80 hover:text-amber-950',
+                                            'dark:text-amber-200/80 dark:hover:bg-amber-900/50 dark:hover:text-amber-50',
+                                            '[&_svg]:transition-transform [&[data-state=open]_svg]:rotate-180',
+                                        )}
+                                        aria-label="Mostrar ou ocultar detalhes das pendências"
+                                    >
+                                        <ChevronDown className="size-4" />
+                                    </Button>
+                                </CollapsibleTrigger>
+                            </div>
 
-                                <div className="flex flex-wrap gap-2">
-                                    {financialPendency ? (
-                                        <Button
-                                            type="button"
-                                            onClick={() =>
-                                                setNegotiationOpen(true)
-                                            }
-                                        >
-                                            Negociar
-                                        </Button>
-                                    ) : null}
+                            <CollapsibleContent className="overflow-hidden">
+                                <div
+                                    className={cn(
+                                        'mt-4 space-y-3 border-t pt-4',
+                                        'border-amber-200/80 dark:border-amber-800/50',
+                                    )}
+                                >
+                                    <ul className="space-y-2 text-sm text-amber-950/90 dark:text-amber-50/90">
+                                        {pendencies.map((p) => (
+                                            <li
+                                                key={p.id}
+                                                className="flex gap-2 leading-relaxed"
+                                            >
+                                                <span
+                                                    className="mt-2 size-1 shrink-0 rounded-full bg-amber-500/80 dark:bg-amber-400/80"
+                                                    aria-hidden
+                                                />
+                                                <span>{p.summary}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
 
-                                    {hasBlockingFinancialPendency ? (
-                                        artifacts ? (
-                                            <Badge variant="secondary">
-                                                Acordo gerado
-                                            </Badge>
-                                        ) : (
-                                            <Badge variant="secondary">
-                                                Negociação necessária para
-                                                continuar
-                                            </Badge>
-                                        )
-                                    ) : null}
+                                    <div className="flex flex-wrap gap-2">
+                                        {financialPendency ? (
+                                            <Button
+                                                type="button"
+                                                className="bg-amber-900 text-amber-50 hover:bg-amber-900/90 dark:bg-amber-100 dark:text-amber-950 dark:hover:bg-amber-100/90"
+                                                onClick={() =>
+                                                    setNegotiationOpen(true)
+                                                }
+                                            >
+                                                Negociar
+                                            </Button>
+                                        ) : null}
 
-                                    {hasBlockingNonFinancialPendency ? (
-                                        overrideStatus === 'requested' ? (
-                                            <>
-                                                <Badge variant="secondary">
-                                                    Quebra solicitada (aguardando
-                                                    gestor)
+                                        {hasBlockingFinancialPendency ? (
+                                            artifacts ? (
+                                                <Badge
+                                                    variant="secondary"
+                                                    className="border-amber-200/80 bg-amber-100/80 text-amber-950 dark:border-amber-800 dark:bg-amber-900/60 dark:text-amber-50"
+                                                >
+                                                    Acordo gerado
                                                 </Badge>
+                                            ) : (
+                                                <Badge
+                                                    variant="secondary"
+                                                    className="border-amber-200/80 bg-amber-100/80 text-amber-950 dark:border-amber-800 dark:bg-amber-900/60 dark:text-amber-50"
+                                                >
+                                                    Negociação necessária para
+                                                    continuar
+                                                </Badge>
+                                            )
+                                        ) : null}
+
+                                        {hasBlockingNonFinancialPendency ? (
+                                            overrideStatus === 'requested' ? (
+                                                <>
+                                                    <Badge
+                                                        variant="secondary"
+                                                        className="border-amber-200/80 bg-amber-100/80 text-amber-950 dark:border-amber-800 dark:bg-amber-900/60 dark:text-amber-50"
+                                                    >
+                                                        Quebra solicitada
+                                                        (aguardando gestor)
+                                                    </Badge>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        className="border-amber-300/80 bg-transparent text-amber-950 hover:bg-amber-100/60 dark:border-amber-700 dark:text-amber-50 dark:hover:bg-amber-900/40"
+                                                        onClick={
+                                                            simulateApproveOverride
+                                                        }
+                                                    >
+                                                        Simular aprovação
+                                                    </Button>
+                                                </>
+                                            ) : overrideStatus ===
+                                              'approved' ? (
+                                                <Badge
+                                                    variant="secondary"
+                                                    className="border-amber-200/80 bg-amber-100/80 text-amber-950 dark:border-amber-800 dark:bg-amber-900/60 dark:text-amber-50"
+                                                >
+                                                    Quebra autorizada
+                                                </Badge>
+                                            ) : (
                                                 <Button
                                                     type="button"
                                                     variant="outline"
-                                                    onClick={simulateApproveOverride}
+                                                    className="border-amber-300/80 bg-transparent text-amber-950 hover:bg-amber-100/60 dark:border-amber-700 dark:text-amber-50 dark:hover:bg-amber-900/40"
+                                                    onClick={requestOverride}
                                                 >
-                                                    Simular aprovação
+                                                    Solicitar quebra
                                                 </Button>
-                                            </>
-                                        ) : overrideStatus === 'approved' ? (
-                                            <Badge variant="secondary">
-                                                Quebra autorizada
-                                            </Badge>
-                                        ) : (
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                onClick={requestOverride}
-                                            >
-                                                Solicitar quebra
-                                            </Button>
-                                        )
-                                    ) : null}
+                                            )
+                                        ) : null}
+                                    </div>
                                 </div>
-                            </div>
-                        </AlertDescription>
-                    </Alert>
+                            </CollapsibleContent>
+                        </div>
+                    </Collapsible>
                 ) : null}
 
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-base">
-                            Seleção de requerimento
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="flex flex-col gap-3">
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                <div className="flex items-center gap-2">
-                                    <Button
-                                        type="button"
-                                        variant={
+                {hasStudent ? (
+                <Card className="box-content overflow-hidden border-0 shadow-none">
+                    <CardContent className="p-0">
+                        <div className="px-6 pt-6">
+                            <div
+                                className="flex flex-wrap gap-8 border-b border-border"
+                                role="tablist"
+                                aria-label="Requerimentos — tipo de listagem"
+                            >
+                                <button
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={activeTab === 'catalog'}
+                                    onClick={() => setActiveTab('catalog')}
+                                    className={cn(
+                                        'flex items-center gap-2 border-b-2 pb-3 text-sm transition-colors',
+                                        activeTab === 'catalog'
+                                            ? 'border-foreground font-semibold text-foreground'
+                                            : 'border-transparent font-medium text-muted-foreground hover:text-foreground',
+                                    )}
+                                >
+                                    Novo requerimento
+                                    <span
+                                        className={cn(
+                                            'inline-flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-xs font-semibold tabular-nums',
                                             activeTab === 'catalog'
-                                                ? 'default'
-                                                : 'outline'
-                                        }
-                                        onClick={() => setActiveTab('catalog')}
+                                                ? 'bg-foreground text-background'
+                                                : 'bg-muted text-muted-foreground',
+                                        )}
                                     >
-                                        Novo requerimento{' '}
-                                        <Badge
-                                            variant="secondary"
-                                            className="ml-2"
-                                        >
-                                            {requirements.length}
-                                        </Badge>
-                                    </Button>
-                                    <Button
-                                        type="button"
-                                        variant={
+                                        {requirements.length}
+                                    </span>
+                                </button>
+                                <button
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={activeTab === 'requested'}
+                                    onClick={() => setActiveTab('requested')}
+                                    className={cn(
+                                        'flex items-center gap-2 border-b-2 pb-3 text-sm transition-colors',
+                                        activeTab === 'requested'
+                                            ? 'border-foreground font-semibold text-foreground'
+                                            : 'border-transparent font-medium text-muted-foreground hover:text-foreground',
+                                    )}
+                                >
+                                    Processos solicitados
+                                    <span
+                                        className={cn(
+                                            'inline-flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-xs font-semibold tabular-nums',
                                             activeTab === 'requested'
-                                                ? 'default'
-                                                : 'outline'
-                                        }
-                                        onClick={() =>
-                                            setActiveTab('requested')
-                                        }
+                                                ? 'bg-foreground text-background'
+                                                : 'bg-muted text-muted-foreground',
+                                        )}
                                     >
-                                        Processos solicitados{' '}
-                                        <Badge
-                                            variant="secondary"
-                                            className="ml-2"
-                                        >
-                                            {requestedProcesses.length}
-                                        </Badge>
-                                    </Button>
-                                </div>
-                                {activeTab === 'catalog' ? (
-                                    <div className="w-full sm:max-w-sm">
-                                        <Input
-                                            value={filterText}
-                                            onChange={(e) =>
-                                                setFilterText(e.target.value)
-                                            }
-                                            placeholder="Filtrar requerimentos…"
-                                        />
-                                    </div>
-                                ) : null}
+                                        {requestedProcesses.length}
+                                    </span>
+                                </button>
                             </div>
+                        </div>
 
+                        {activeTab === 'catalog' ? (
+                            <div className="flex flex-col gap-3 border-b border-border/80 bg-muted/25 px-6 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                                <div
+                                    className="flex flex-wrap gap-2"
+                                    role="group"
+                                    aria-label="Filtrar por categoria"
+                                >
+                                    {CATALOG_PILL_OPTIONS.map((opt) => {
+                                        const active = catalogPill === opt.id;
+
+                                        return (
+                                            <button
+                                                key={opt.id}
+                                                type="button"
+                                                onClick={() =>
+                                                    setCatalogPill(opt.id)
+                                                }
+                                                className={cn(
+                                                    'rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
+                                                    active
+                                                        ? 'bg-chart-2 text-white shadow-sm dark:bg-chart-2 dark:text-white'
+                                                        : 'bg-background/80 text-muted-foreground hover:bg-background hover:text-foreground',
+                                                )}
+                                            >
+                                                {opt.label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                <div className="relative w-full sm:max-w-xs sm:shrink-0">
+                                    <Search
+                                        className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                                        aria-hidden
+                                    />
+                                    <Input
+                                        value={filterText}
+                                        onChange={(e) =>
+                                            setFilterText(e.target.value)
+                                        }
+                                        placeholder="Filtrar serviços…"
+                                        className="h-9 border-border/80 bg-background pl-9 shadow-none"
+                                    />
+                                </div>
+                            </div>
+                        ) : null}
+
+                        <div className="space-y-6 px-6 py-6">
                             {activeTab === 'requested' ? (
                                 requestedProcesses.length === 0 ? (
                                     <p className="text-sm text-muted-foreground">
@@ -663,7 +1139,7 @@ export default function FlowsNew({
                                     </div>
                                 )
                             ) : (
-                                <div className="space-y-6">
+                                <>
                                     {popularRequirements.length > 0 ? (
                                         <section className="space-y-2">
                                             <div className="flex items-center justify-between gap-4">
@@ -896,89 +1372,142 @@ export default function FlowsNew({
                                         </section>
                                     ) : null}
 
-                                    {visibleRequirements.length === 0 ? (
+                                    {pillFilteredRequirements.length === 0 ? (
                                         <p className="text-sm text-muted-foreground">
-                                            {filterText.trim()
-                                                ? 'Nenhum requerimento corresponde ao filtro.'
-                                                : requirements.length === 0
-                                                  ? 'Nenhum requerimento disponível.'
+                                            {requirements.length === 0
+                                                ? 'Nenhum requerimento disponível.'
+                                                : filterText.trim() ||
+                                                    catalogPill !== 'all'
+                                                  ? 'Nenhum requerimento corresponde à categoria ou ao texto de filtro.'
                                                   : null}
                                         </p>
                                     ) : null}
-                                </div>
+                                </>
                             )}
-
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                <div className="text-sm text-muted-foreground">
-                                    {selectedRequirementId ? (
-                                        <>Selecionado: #{selectedRequirementId}</>
-                                    ) : (
-                                        <>Selecione um requerimento para iniciar.</>
-                                    )}
-                                </div>
-                                <Button
-                                    type="button"
-                                    disabled={
-                                        !hasStudent ||
-                                        hasBlockingPendency ||
-                                        selectedRequirementId === null
-                                    }
-                                    onClick={() =>
-                                        selectedRequirementId !== null
-                                            ? startRequirement(selectedRequirementId)
-                                            : null
-                                    }
-                                >
-                                    Iniciar
-                                </Button>
-                            </div>
                         </div>
                     </CardContent>
                 </Card>
+                ) : null}
             </div>
 
             <Sheet open={negotiationOpen} onOpenChange={setNegotiationOpen}>
-                <SheetContent side="right">
-                    <SheetHeader>
-                        <SheetTitle>Negociação financeira</SheetTitle>
-                        <SheetDescription>
-                            Selecione uma opção para gerar boleto, PIX e contrato
-                            (mock).
+                <SheetContent
+                    side="right"
+                    className="flex w-full flex-col gap-0 p-0 sm:max-w-md"
+                >
+                    <SheetHeader className="space-y-3 border-b px-6 pt-6 pr-12 pb-5 text-left">
+                        <SheetTitle className="text-lg font-semibold">
+                            Simulação de negociação
+                        </SheetTitle>
+                        <SheetDescription className="sr-only">
+                            Escolha uma condição de pagamento para gerar boleto,
+                            PIX e contrato de demonstração.
                         </SheetDescription>
+                        <p className="text-sm text-muted-foreground">
+                            <span className="text-foreground/90">
+                                {searchResult?.student?.name ?? 'Aluno'}
+                            </span>
+                            <span className="mx-1.5 text-foreground/35">·</span>
+                            <span>
+                                Débito total:{' '}
+                                <strong className="font-semibold text-destructive">
+                                    {formatBrl(negotiationDebtTotal)}
+                                </strong>
+                            </span>
+                        </p>
+                        <p className="text-sm leading-relaxed text-muted-foreground">
+                            Para prosseguir com a abertura do processo, é
+                            necessário regularizar sua situação financeira.
+                            Selecione uma das condições especiais abaixo:
+                        </p>
                     </SheetHeader>
 
-                    <div className="space-y-3 px-4">
-                        {negotiationOptions.map((opt) => (
-                            <Card key={opt.id}>
-                                <CardHeader className="pb-2">
-                                    <div className="flex items-center justify-between gap-3">
-                                        <CardTitle className="text-base">
-                                            {opt.label}
-                                        </CardTitle>
-                                        <Badge variant="secondary">
-                                            {opt.note}
-                                        </Badge>
-                                    </div>
-                                </CardHeader>
-                                <CardContent className="flex items-center justify-between gap-3">
-                                    <div className="text-sm text-muted-foreground">
-                                        Confirme para gerar os artefatos.
-                                    </div>
-                                    <Button
+                    <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+                        <div className="space-y-3">
+                            {negotiationPlans.map((plan) => {
+                                const selected =
+                                    selectedNegotiationId === plan.id;
+
+                                return (
+                                    <button
+                                        key={plan.id}
                                         type="button"
-                                        disabled={isGeneratingArtifacts}
-                                        onClick={() => generateArtifacts(opt.id)}
+                                        onClick={() =>
+                                            setSelectedNegotiationId(plan.id)
+                                        }
+                                        className={cn(
+                                            'relative w-full rounded-lg border bg-card p-4 text-left shadow-sm transition-colors',
+                                            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                                            plan.recommended
+                                                ? selected
+                                                    ? 'border-foreground ring-1 ring-foreground/15'
+                                                    : 'border-foreground'
+                                                : selected
+                                                  ? 'border-primary/50 ring-1 ring-primary/15'
+                                                  : 'border-border/70',
+                                        )}
                                     >
-                                        {isGeneratingArtifacts
-                                            ? 'A gerar…'
-                                            : 'Confirmar'}
-                                    </Button>
-                                </CardContent>
-                            </Card>
-                        ))}
+                                        {plan.recommended ? (
+                                            <span className="absolute left-4 top-3 rounded bg-teal-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-teal-700 dark:text-teal-400">
+                                                Recomendado
+                                            </span>
+                                        ) : null}
+                                        <div
+                                            className={cn(
+                                                'grid gap-1 pr-10',
+                                                plan.recommended ? 'pt-7' : '',
+                                            )}
+                                        >
+                                            <div className="text-sm font-medium text-foreground">
+                                                {plan.title}
+                                            </div>
+                                            <div className="flex flex-wrap items-baseline gap-2">
+                                                <span className="text-lg font-semibold tabular-nums tracking-tight">
+                                                    {plan.amountLine}
+                                                </span>
+                                                {plan.highlight ? (
+                                                    <span className="text-xs font-medium text-teal-600 dark:text-teal-400">
+                                                        {plan.highlight}
+                                                    </span>
+                                                ) : null}
+                                            </div>
+                                            <p className="text-xs leading-snug text-muted-foreground">
+                                                {plan.footer}
+                                            </p>
+                                        </div>
+                                        <span
+                                            className={cn(
+                                                'absolute right-4 top-4 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2',
+                                                selected
+                                                    ? 'border-foreground bg-foreground'
+                                                    : 'border-muted-foreground/35',
+                                            )}
+                                            aria-hidden
+                                        >
+                                            {selected ? (
+                                                <span className="block h-2 w-2 rounded-full bg-background" />
+                                            ) : null}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        <div className="mt-5 flex gap-3 rounded-md border border-sky-200/90 bg-sky-50/90 px-3.5 py-3 text-sm text-sky-950/80 dark:border-sky-900/50 dark:bg-sky-950/35 dark:text-sky-100/85">
+                            <Info
+                                className="mt-0.5 h-4 w-4 shrink-0 text-sky-600 dark:text-sky-400"
+                                aria-hidden
+                            />
+                            <p className="leading-snug">
+                                Ao confirmar, o boleto será gerado
+                                automaticamente no seu painel financeiro e o
+                                requerimento será desbloqueado para
+                                preenchimento.
+                            </p>
+                        </div>
 
                         {artifacts ? (
-                            <Card>
+                            <Card className="mt-5 border-dashed">
                                 <CardHeader className="pb-2">
                                     <CardTitle className="text-base">
                                         Artefatos gerados
@@ -1014,14 +1543,26 @@ export default function FlowsNew({
                         ) : null}
                     </div>
 
-                    <SheetFooter>
+                    <SheetFooter className="flex-col gap-3 border-t bg-background px-6 py-5 sm:flex-col">
                         <Button
                             type="button"
-                            variant="outline"
+                            className="w-full"
+                            disabled={isGeneratingArtifacts}
+                            onClick={() =>
+                                void generateArtifacts(selectedNegotiationId)
+                            }
+                        >
+                            {isGeneratingArtifacts
+                                ? 'A processar…'
+                                : 'Fechar acordo e liberar requerimento'}
+                        </Button>
+                        <button
+                            type="button"
+                            className="text-center text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
                             onClick={() => setNegotiationOpen(false)}
                         >
-                            Fechar
-                        </Button>
+                            Cancelar simulação
+                        </button>
                     </SheetFooter>
                 </SheetContent>
             </Sheet>
