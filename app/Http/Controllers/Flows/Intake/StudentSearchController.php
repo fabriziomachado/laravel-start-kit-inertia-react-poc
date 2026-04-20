@@ -33,7 +33,7 @@ final class StudentSearchController
             'course' => 'Administração',
             'semester' => '3º',
             'unit' => 'Unidade Centro',
-            'avatar_url' => 'https://i.pravatar.cc/320?u='.rawurlencode($enrollmentCode),
+            'avatar_url' => 'https://i.pravatar.cc/320',
             'cpf' => '123.456.789-00',
         ];
 
