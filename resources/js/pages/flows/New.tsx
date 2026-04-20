@@ -1290,6 +1290,9 @@ export default function FlowsNew({
 
         
 
+                {isSearching ||
+                (hasStudent && pendencies.length > 0) ? (
+                <div className="min-w-0 space-y-3 px-6">
                 {isSearching ? (
                     <Alert>
                         <LoaderCircle className="animate-spin" aria-hidden />
@@ -1304,78 +1307,68 @@ export default function FlowsNew({
                     <Collapsible defaultOpen={false}>
                         <div
                             className={cn(
-                                'rounded-xl border px-4 py-4 shadow-sm',
-                                'border-amber-200/90 bg-amber-50/95 text-amber-950',
-                                'dark:border-amber-800/55 dark:bg-amber-950/35 dark:text-amber-50',
+                                'w-full overflow-hidden rounded-xl border border-border/60 bg-muted/30 text-foreground shadow-none ring-1 ring-border/35 dark:bg-muted/20',
                                 hasBlockingPendency &&
-                                    'ring-1 ring-amber-300/40 dark:ring-amber-700/30',
+                                    'border-l-2 border-l-amber-500/90 dark:border-l-amber-500/80',
                             )}
                         >
-                            <div className="flex items-start gap-3">
-                                <div
+                            <CollapsibleTrigger asChild>
+                                <button
+                                    type="button"
+                                    aria-label="Mostrar ou ocultar detalhes das pendências"
                                     className={cn(
-                                        'flex size-10 shrink-0 items-center justify-center rounded-full',
-                                        'bg-amber-100/90 dark:bg-amber-900/50',
+                                        'group flex w-full cursor-pointer items-start gap-3 px-6 py-4 text-left outline-none transition-colors',
+                                        'hover:bg-muted/45 focus-visible:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
                                     )}
-                                    aria-hidden
                                 >
-                                    <AlertTriangle
-                                        className="size-5 text-amber-800 dark:text-amber-200"
-                                        strokeWidth={2}
-                                    />
-                                </div>
-                                <div className="min-w-0 flex-1 space-y-1 pr-1">
-                                    <h3 className="text-base font-semibold leading-snug tracking-tight text-amber-950 dark:text-amber-50">
-                                        {pendencyBannerTitle}
-                                    </h3>
-                                    <p className="text-sm leading-relaxed text-amber-900/75 dark:text-amber-100/80">
-                                        {pendencyBannerSubtitle}
-                                    </p>
-                                </div>
-                                <CollapsibleTrigger asChild>
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        className={cn(
-                                            'size-9 shrink-0 text-amber-900/70 hover:bg-amber-100/80 hover:text-amber-950',
-                                            'dark:text-amber-200/80 dark:hover:bg-amber-900/50 dark:hover:text-amber-50',
-                                            '[&_svg]:transition-transform [&[data-state=open]_svg]:rotate-180',
-                                        )}
-                                        aria-label="Mostrar ou ocultar detalhes das pendências"
+                                    <div
+                                        className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-background/80 text-amber-600 ring-1 ring-border/50 dark:text-amber-500"
+                                        aria-hidden
                                     >
-                                        <ChevronDown className="size-4" />
-                                    </Button>
-                                </CollapsibleTrigger>
-                            </div>
+                                        <AlertTriangle
+                                            className="size-4"
+                                            strokeWidth={2}
+                                        />
+                                    </div>
+                                    <div className="min-w-0 flex-1 space-y-1 pr-1">
+                                        <h3 className="text-sm font-semibold leading-snug tracking-tight text-foreground">
+                                            {pendencyBannerTitle}
+                                        </h3>
+                                        <p className="text-sm leading-relaxed text-muted-foreground">
+                                            {pendencyBannerSubtitle}
+                                        </p>
+                                    </div>
+                                    <ChevronDown
+                                        className="mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180"
+                                        aria-hidden
+                                    />
+                                </button>
+                            </CollapsibleTrigger>
 
                             <CollapsibleContent className="overflow-hidden">
-                                <div
-                                    className={cn(
-                                        'mt-4 space-y-3 border-t pt-4',
-                                        'border-amber-200/80 dark:border-amber-800/50',
-                                    )}
-                                >
-                                    <ul className="space-y-2 text-sm text-amber-950/90 dark:text-amber-50/90">
+                                <div className="space-y-3 border-t border-border/50 px-6 pb-4 pt-4">
+                                    <ul className="space-y-2 text-sm leading-relaxed text-muted-foreground">
                                         {pendencies.map((p) => (
                                             <li
                                                 key={p.id}
-                                                className="flex gap-2 leading-relaxed"
+                                                className="flex gap-2.5"
                                             >
                                                 <span
-                                                    className="mt-2 size-1 shrink-0 rounded-full bg-amber-500/80 dark:bg-amber-400/80"
+                                                    className="mt-2 size-1 shrink-0 rounded-full bg-muted-foreground/35"
                                                     aria-hidden
                                                 />
-                                                <span>{p.summary}</span>
+                                                <span className="text-foreground/90">
+                                                    {p.summary}
+                                                </span>
                                             </li>
                                         ))}
                                     </ul>
 
-                                    <div className="flex flex-wrap gap-2">
+                                    <div className="flex flex-wrap items-center gap-2">
                                         {financialPendency ? (
                                             <Button
                                                 type="button"
-                                                className="bg-amber-900 text-amber-50 hover:bg-amber-900/90 dark:bg-amber-100 dark:text-amber-950 dark:hover:bg-amber-100/90"
+                                                size="sm"
                                                 onClick={() =>
                                                     setNegotiationOpen(true)
                                                 }
@@ -1386,16 +1379,13 @@ export default function FlowsNew({
 
                                         {hasBlockingFinancialPendency ? (
                                             artifacts ? (
-                                                <Badge
-                                                    variant="secondary"
-                                                    className="border-amber-200/80 bg-amber-100/80 text-amber-950 dark:border-amber-800 dark:bg-amber-900/60 dark:text-amber-50"
-                                                >
+                                                <Badge variant="secondary">
                                                     Acordo gerado
                                                 </Badge>
                                             ) : (
                                                 <Badge
                                                     variant="secondary"
-                                                    className="border-amber-200/80 bg-amber-100/80 text-amber-950 dark:border-amber-800 dark:bg-amber-900/60 dark:text-amber-50"
+                                                    className="max-w-full whitespace-normal text-left leading-snug"
                                                 >
                                                     Negociação necessária para
                                                     continuar
@@ -1408,7 +1398,7 @@ export default function FlowsNew({
                                                 <>
                                                     <Badge
                                                         variant="secondary"
-                                                        className="border-amber-200/80 bg-amber-100/80 text-amber-950 dark:border-amber-800 dark:bg-amber-900/60 dark:text-amber-50"
+                                                        className="max-w-full whitespace-normal text-left leading-snug"
                                                     >
                                                         Quebra solicitada
                                                         (aguardando gestor)
@@ -1416,7 +1406,7 @@ export default function FlowsNew({
                                                     <Button
                                                         type="button"
                                                         variant="outline"
-                                                        className="border-amber-300/80 bg-transparent text-amber-950 hover:bg-amber-100/60 dark:border-amber-700 dark:text-amber-50 dark:hover:bg-amber-900/40"
+                                                        size="sm"
                                                         onClick={
                                                             simulateApproveOverride
                                                         }
@@ -1428,7 +1418,7 @@ export default function FlowsNew({
                                                 <Button
                                                     type="button"
                                                     variant="outline"
-                                                    className="border-amber-300/80 bg-transparent text-amber-950 hover:bg-amber-100/60 dark:border-amber-700 dark:text-amber-50 dark:hover:bg-amber-900/40"
+                                                    size="sm"
                                                     onClick={requestOverride}
                                                 >
                                                     Solicitar quebra
@@ -1440,6 +1430,8 @@ export default function FlowsNew({
                             </CollapsibleContent>
                         </div>
                     </Collapsible>
+                ) : null}
+                </div>
                 ) : null}
 
                 {student ? (
@@ -1901,31 +1893,50 @@ export default function FlowsNew({
                     side="right"
                     className="flex w-full flex-col gap-0 p-0 sm:max-w-md"
                 >
-                    <SheetHeader className="space-y-3 border-b px-6 pt-6 pr-12 pb-5 text-left">
-                        <SheetTitle className="text-lg font-semibold">
+                    <SheetHeader className="gap-0 space-y-0 border-b border-border/60 bg-muted/15 p-0 px-6 pb-6 pt-6 pr-14 text-left dark:bg-muted/10">
+                        <SheetTitle className="text-base font-semibold tracking-tight text-foreground">
                             Simulação de negociação
                         </SheetTitle>
                         <SheetDescription className="sr-only">
                             Escolha uma condição de pagamento para gerar boleto,
                             PIX e contrato de demonstração.
                         </SheetDescription>
-                        <p className="text-sm text-muted-foreground">
-                            <span className="text-foreground/90">
-                                {searchResult?.student?.name ?? 'Aluno'}
-                            </span>
-                            <span className="mx-1.5 text-foreground/35">·</span>
-                            <span>
-                                Débito total:{' '}
-                                <strong className="font-semibold text-destructive">
-                                    {formatBrl(negotiationDebtTotal)}
-                                </strong>
-                            </span>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                            {searchResult?.student?.name ?? 'Aluno'}
                         </p>
-                        <p className="text-sm leading-relaxed text-muted-foreground">
-                            Para prosseguir com a abertura do processo, é
-                            necessário regularizar sua situação financeira.
-                            Selecione uma das condições especiais abaixo:
-                        </p>
+                        <div className="mt-5 rounded-lg bg-muted/30 p-4 dark:bg-muted/20">
+                            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                                Valor em aberto
+                            </p>
+                            <p className="mt-1.5 text-2xl font-semibold tabular-nums tracking-tight text-foreground">
+                                {formatBrl(negotiationDebtTotal)}
+                            </p>
+                            {dossierUrl ? (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="mt-3 h-8 w-full gap-1.5 text-xs font-medium shadow-none"
+                                    asChild
+                                >
+                                    <a
+                                        href={dossierUrl}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                    >
+                                        Ver detalhes da dívida
+                                        <ExternalLink
+                                            className="size-3.5 shrink-0 opacity-70"
+                                            aria-hidden
+                                        />
+                                    </a>
+                                </Button>
+                            ) : (
+                                <p className="mt-3 text-xs text-muted-foreground">
+                                    Consulte o financeiro para o detalhamento
+                                    completo.
+                                </p>
+                            )}
+                        </div>
                     </SheetHeader>
 
                     <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
