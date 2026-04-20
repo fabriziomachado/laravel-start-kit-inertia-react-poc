@@ -96,10 +96,24 @@ final class FlowCatalogController
     {
         Gate::authorize('start', $workflow);
 
+        $validated = $request->validate([
+            'student_id' => ['nullable', 'integer'],
+            'student_code' => ['nullable', 'string', 'max:50'],
+            'student_name' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $context = array_filter([
+            'student_id' => $validated['student_id'] ?? null,
+            'student_code' => $validated['student_code'] ?? null,
+            'student_name' => $validated['student_name'] ?? null,
+        ], static fn (mixed $v): bool => $v !== null && $v !== '');
+
         return $this->flowRunStarter->startOrRedirectToForm(
             $workflow,
             $request->user(),
             'flows.index',
+            'flows_error',
+            $context,
         );
     }
 
