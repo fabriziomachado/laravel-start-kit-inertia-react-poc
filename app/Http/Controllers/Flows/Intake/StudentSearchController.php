@@ -22,16 +22,19 @@ final class StudentSearchController
             ]);
         }
 
+        $enrollmentCode = '20240001';
+
         $student = [
             'id' => 1,
-            'code' => '20240001',
+            'code' => $enrollmentCode,
             'name' => 'Maria Ferreira',
             'email' => 'maria.ferreira@example.test',
             'status' => 'Ativo',
             'course' => 'Administração',
             'semester' => '3º',
             'unit' => 'Unidade Centro',
-            'avatar_url' => null,
+            'avatar_url' => 'https://i.pravatar.cc/320?u='.rawurlencode($enrollmentCode),
+            'cpf' => '123.456.789-00',
         ];
 
         $normalized = Str::of($q)->lower()->toString();
