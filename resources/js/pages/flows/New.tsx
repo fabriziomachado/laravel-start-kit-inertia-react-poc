@@ -603,7 +603,7 @@ export default function FlowsNew({
             <div className="flex flex-1 flex-col gap-6 p-4">
                 <div>
                     <h1 className="text-2xl font-semibold tracking-tight">
-                        Abertura de processo
+                        Abertura de requerimento  
                     </h1>
                     <p className="text-sm text-muted-foreground">
                         {hasStudent
@@ -1066,7 +1066,7 @@ export default function FlowsNew({
                                             : 'border-transparent font-medium text-muted-foreground hover:text-foreground',
                                     )}
                                 >
-                                    Processos solicitados
+                                    Requerimetnos do aluno
                                     <span
                                         className={cn(
                                             'inline-flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-xs font-semibold tabular-nums',
@@ -1192,18 +1192,7 @@ export default function FlowsNew({
                                                                     {r.description}
                                                                 </p>
                                                             ) : null}
-                                                            <div className="mt-2 flex flex-wrap gap-1">
-                                                                {r.tags
-                                                                    .slice(0, 3)
-                                                                    .map((t) => (
-                                                                        <Badge
-                                                                            key={t}
-                                                                            variant="secondary"
-                                                                        >
-                                                                            {t}
-                                                                        </Badge>
-                                                                    ))}
-                                                            </div>
+                                                            
                                                         </CardHeader>
                                                         <CardContent className="pt-0">
                                                             <Button

@@ -79,35 +79,35 @@ export default function FlowsIndex({
                     <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0">
                             <h1 className="text-2xl font-semibold tracking-tight">
-                                Processos
+                                Requerimentos
                             </h1>
                             <p className="text-sm text-muted-foreground">
-                                Escolha um fluxo para iniciar ou consulte as
+                                Escolha um requerimento para iniciar ou consulte as
                                 execuções recentes.
                             </p>
                         </div>
                         <Button asChild>
-                            <Link href={flowsIntake.url()}>Novo processo</Link>
+                            <Link href={flowsIntake.url()}>Novo requerimento</Link>
                         </Button>
                     </div>
                 </div>
 
                 {flows_error ? (
                     <Alert variant="destructive">
-                        <AlertTitle>Processos</AlertTitle>
+                        <AlertTitle>Requerimentos</AlertTitle>
                         <AlertDescription>{flows_error}</AlertDescription>
                     </Alert>
                 ) : null}
                 {flows_success ? (
                     <Alert>
-                        <AlertTitle>Processos</AlertTitle>
+                        <AlertTitle>Requerimentos</AlertTitle>
                         <AlertDescription>{flows_success}</AlertDescription>
                     </Alert>
                 ) : null}
 
-                <section className="space-y-3">
+                <section className="hidden space-y-3">
                     <h2 className="text-lg font-medium tracking-tight">
-                        Fluxos disponíveis
+                        Requerimentos disponíveis
                     </h2>
                     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                         {workflows.map((w) => (

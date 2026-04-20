@@ -241,36 +241,12 @@ export function RecentExecutionsAudit({
     const totalListed = runs.length;
 
     return (
-        <div className="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card text-card-foreground shadow-sm dark:border-sidebar-border">
-            <div className="flex flex-col gap-4 border-b p-6 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
-                <div className="space-y-1">
-                    <h2 className="text-lg font-semibold tracking-tight">
-                        Registo de execuções
-                    </h2>
-                    <p className="text-sm text-muted-foreground">
-                        {filteredRuns.length === totalListed
-                            ? `${filteredRuns.length} execução${filteredRuns.length === 1 ? '' : 'es'}`
-                            : `${filteredRuns.length} de ${totalListed} execução${totalListed === 1 ? '' : 'es'} após filtro`}
-                        {isOrgWide
-                            ? ' — todas as contas'
-                            : ' — as tuas execuções'}
-                    </p>
-                </div>
-                <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="shrink-0 gap-2"
-                    disabled={filteredRuns.length === 0}
-                    onClick={() => exportRunsCsv(filteredRuns)}
-                >
-                    <Download className="size-4" aria-hidden />
-                    Exportar CSV
-                </Button>
-            </div>
 
-            <div className="space-y-4 border-b px-6 py-4">
-                <div className="relative">
+
+        <>
+
+            <div className=" space-y-4  px-6 py-4 pb-0">
+                <div className="relative mb-8">
                     <Search
                         className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
                         aria-hidden
@@ -328,6 +304,31 @@ export function RecentExecutionsAudit({
                     </span>
                 </div>
             </div>
+
+        <div className="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card text-card-foreground shadow-sm dark:border-sidebar-border">
+            
+            
+            
+            
+            
+            <div className="hidden flex flex-col gap-4 border-b p-6 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+                <div className="space-y-1">
+                    <h2 className="text-lg font-semibold tracking-tight">
+                        Registo de execuções
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                        {filteredRuns.length === totalListed
+                            ? `${filteredRuns.length} execução${filteredRuns.length === 1 ? '' : 'es'}`
+                            : `${filteredRuns.length} de ${totalListed} execução${totalListed === 1 ? '' : 'es'} após filtro`}
+                        {isOrgWide
+                            ? ' — todas as contas'
+                            : ' — as tuas execuções'}
+                    </p>
+                </div>
+                
+            </div>
+
+
 
             <div className="overflow-x-auto">
                 <table className="w-full min-w-[760px] text-left text-sm">
@@ -515,5 +516,6 @@ export function RecentExecutionsAudit({
                 )}
             </div>
         </div>
+        </>
     );
 }
