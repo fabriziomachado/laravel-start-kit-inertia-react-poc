@@ -37,6 +37,7 @@ final class FlowRunStarter
         User $user,
         string $flowsIndexRoute,
         string $sessionErrorKey = 'flows_error',
+        array $context = [],
     ): RedirectResponse {
         if (! $workflow->is_active) {
             return redirect()
@@ -44,7 +45,11 @@ final class FlowRunStarter
                 ->with($sessionErrorKey, 'Este fluxo não está disponível.');
         }
 
-        $run = $this->workflowService->run($workflow, WorkflowStarterPayload::forUser($user));
+        $payload = $context === []
+            ? WorkflowStarterPayload::forUser($user)
+            : WorkflowStarterPayload::forUserWithContext($user, $context);
+
+        $run = $this->workflowService->run($workflow, $payload);
 
         if ($run->status !== RunStatus::Waiting) {
             return redirect()
