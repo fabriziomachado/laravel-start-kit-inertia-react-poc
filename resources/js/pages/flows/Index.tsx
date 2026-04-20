@@ -1,4 +1,4 @@
-import { Head, router, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { GitBranch } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { RecentExecutionsAudit } from '@/components/flows/recent-executions-audit';
@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/card';
 import AppLayout from '@/layouts/app-layout';
 import { dashboard } from '@/routes';
-import { index as flowsIndex } from '@/routes/flows';
+import { index as flowsIndex, intake as flowsIntake } from '@/routes/flows';
 import { store as flowsRunsStore } from '@/routes/flows/runs';
 import type { BreadcrumbItem, SharedData } from '@/types';
 
@@ -76,13 +76,20 @@ export default function FlowsIndex({
             <Head title="Processos" />
             <div className="flex flex-1 flex-col gap-6 p-4">
                 <div>
-                    <h1 className="text-2xl font-semibold tracking-tight">
-                        Processos
-                    </h1>
-                    <p className="text-sm text-muted-foreground">
-                        Escolha um fluxo para iniciar ou consulte as execuções
-                        recentes.
-                    </p>
+                    <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                            <h1 className="text-2xl font-semibold tracking-tight">
+                                Processos
+                            </h1>
+                            <p className="text-sm text-muted-foreground">
+                                Escolha um fluxo para iniciar ou consulte as
+                                execuções recentes.
+                            </p>
+                        </div>
+                        <Button asChild>
+                            <Link href={flowsIntake.url()}>Novo processo</Link>
+                        </Button>
+                    </div>
                 </div>
 
                 {flows_error ? (
