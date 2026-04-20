@@ -794,64 +794,75 @@ export default function FlowsNew({
                                         ) : null}
                                     </div>
 
-                                    <div
-                                        className={cn(
-                                            'rounded-lg border border-border/70 bg-muted/25 px-4 py-3 sm:px-5',
-                                            searchResult.student.cpf
-                                                ? 'grid gap-4 sm:grid-cols-2 sm:gap-x-10'
-                                                : 'max-w-md',
-                                        )}
-                                    >
-                                        <div className="min-w-0 space-y-1">
-                                            <p className="text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground">
-                                                Matrícula
-                                            </p>
-                                            <p className="font-mono text-sm font-medium tabular-nums tracking-tight text-foreground">
-                                                {
-                                                    searchResult.student
-                                                        .code
-                                                }
-                                            </p>
-                                        </div>
-                                        {searchResult.student.cpf ? (
-                                            <div className="min-w-0 space-y-1 sm:border-l sm:border-border/60 sm:pl-10">
+                                    <div className="rounded-lg border border-border/70 bg-muted/25 px-4 py-3 sm:px-5">
+                                        <div
+                                            className={cn(
+                                                'grid gap-4',
+                                                searchResult.student.cpf
+                                                    ? 'sm:grid-cols-2 sm:gap-x-10'
+                                                    : 'max-w-md',
+                                            )}
+                                        >
+                                            <div className="min-w-0 space-y-1">
                                                 <p className="text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground">
-                                                    CPF
+                                                    Matrícula
                                                 </p>
                                                 <p className="font-mono text-sm font-medium tabular-nums tracking-tight text-foreground">
                                                     {
                                                         searchResult.student
-                                                            .cpf
+                                                            .code
                                                     }
                                                 </p>
                                             </div>
-                                        ) : null}
-                                    </div>
+                                            {searchResult.student.cpf ? (
+                                                <div className="min-w-0 space-y-1 sm:border-l sm:border-border/60 sm:pl-10">
+                                                    <p className="text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground">
+                                                        CPF
+                                                    </p>
+                                                    <p className="font-mono text-sm font-medium tabular-nums tracking-tight text-foreground">
+                                                        {
+                                                            searchResult.student
+                                                                .cpf
+                                                        }
+                                                    </p>
+                                                </div>
+                                            ) : null}
+                                        </div>
 
-                                    <div className="grid gap-5 sm:grid-cols-3">
-                                        <div className="space-y-1">
-                                            <p className="text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground">
-                                                Curso matriculado
-                                            </p>
-                                            <p className="text-sm font-semibold text-foreground">
-                                                {searchResult.student.course}
-                                            </p>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <p className="text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground">
-                                                Período atual
-                                            </p>
-                                            <p className="text-sm font-semibold text-foreground">
-                                                {searchResult.student.semester}
-                                            </p>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <p className="text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground">
-                                                Unidade
-                                            </p>
-                                            <p className="text-sm font-semibold text-foreground">
-                                                {searchResult.student.unit}
-                                            </p>
+                                        <div className="mt-4 grid gap-4 border-t border-border/50 pt-4 sm:grid-cols-3 sm:gap-x-10">
+                                            <div className="min-w-0 space-y-1">
+                                                <p className="text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground">
+                                                    Curso matriculado
+                                                </p>
+                                                <p className="text-sm font-semibold text-foreground">
+                                                    {
+                                                        searchResult.student
+                                                            .course
+                                                    }
+                                                </p>
+                                            </div>
+                                            <div className="min-w-0 space-y-1 sm:border-l sm:border-border/60 sm:pl-10">
+                                                <p className="text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground">
+                                                    Período atual
+                                                </p>
+                                                <p className="text-sm font-semibold text-foreground">
+                                                    {
+                                                        searchResult.student
+                                                            .semester
+                                                    }
+                                                </p>
+                                            </div>
+                                            <div className="min-w-0 space-y-1 sm:border-l sm:border-border/60 sm:pl-10">
+                                                <p className="text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground">
+                                                    Unidade
+                                                </p>
+                                                <p className="text-sm font-semibold text-foreground">
+                                                    {
+                                                        searchResult.student
+                                                            .unit
+                                                    }
+                                                </p>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
