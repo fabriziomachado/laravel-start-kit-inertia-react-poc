@@ -56,6 +56,24 @@ services:
             - '${FORWARD_MAILPIT_DASHBOARD_PORT:-8025}:8025'
         networks:
             - sail
+    # HTTPS público para testar AMP / webhooks sem instalar ngrok no host.
+    # Uso: exporte NGROK_AUTHTOKEN no .env e suba com COMPOSE_PROFILES=ngrok (ver .env.example).
+    ngrok:
+        image: 'ngrok/ngrok:latest'
+        profiles:
+            - ngrok
+        restart: unless-stopped
+        depends_on:
+            - laravel.test
+        environment:
+            NGROK_AUTHTOKEN: '${NGROK_AUTHTOKEN}'
+        command:
+            - http
+            - laravel.test:80
+        ports:
+            - '${FORWARD_NGROK_WEB_PORT:-4040}:4040'
+        networks:
+            - sail
 networks:
     sail:
         driver: bridge
