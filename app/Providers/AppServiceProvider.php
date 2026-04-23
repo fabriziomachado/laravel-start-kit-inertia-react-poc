@@ -9,6 +9,9 @@ use Aftandilmmd\WorkflowAutomation\Models\WorkflowRun;
 use App\Observers\WorkflowDefinitionObserver;
 use App\Policies\WorkflowPolicy;
 use App\Policies\WorkflowRunPolicy;
+use App\Services\Workflow\AiFieldExtractor;
+use App\Services\Workflow\NoopAiFieldExtractor;
+use App\Services\Workflow\OpenAiFieldExtractor;
 use App\Workflow\Presentations\RegisterWorkflowPresentations;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
@@ -17,7 +20,11 @@ final class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        //
+        $this->app->bind(AiFieldExtractor::class, function (): AiFieldExtractor {
+            $openAi = new OpenAiFieldExtractor;
+
+            return $openAi->isAvailable() ? $openAi : new NoopAiFieldExtractor;
+        });
     }
 
     public function boot(): void
