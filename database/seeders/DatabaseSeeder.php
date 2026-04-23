@@ -15,6 +15,7 @@ final class DatabaseSeeder extends Seeder
 
         if (! app()->environment('production')) {
             $this->call(WorkflowFormWizardExampleSeeder::class);
+            $this->call(WorkflowEmailApprovalDemoSeeder::class);
         }
 
         if (app()->isLocal()) {

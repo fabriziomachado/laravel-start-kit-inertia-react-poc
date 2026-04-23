@@ -163,6 +163,21 @@ final class WorkflowFormProgress
 
         foreach ($ordered as $node) {
             $nodeIdKey = (string) $node->id;
+
+            if ($node->node_key === 'email_approval') {
+                $decisionPayload = self::emailApprovalDecisionPayload($context, $node->id);
+                if ($decisionPayload === null) {
+                    continue;
+                }
+
+                $sections[] = [
+                    'heading' => self::nodeLabel($node),
+                    'lines' => self::emailApprovalReadOnlyLines($decisionPayload),
+                ];
+
+                continue;
+            }
+
             $mainFirst = data_get($context, "{$nodeIdKey}.main.0");
 
             if (! is_array($mainFirst)) {
@@ -263,7 +278,7 @@ final class WorkflowFormProgress
             return collect();
         }
 
-        $edges = $workflow->edges->where('source_port', 'main')->sortBy('id');
+        $edges = $workflow->edges->sortBy('id');
 
         $ordered = collect();
         $queue = [$trigger->id];
@@ -421,7 +436,76 @@ final class WorkflowFormProgress
             return self::sendMailReadOnlyLines($mainFirst);
         }
 
+        if ($node->node_key === 'email_approval') {
+            $decisionPayload = self::emailApprovalDecisionPayload($context, $node->id);
+            if ($decisionPayload !== null) {
+                return self::emailApprovalReadOnlyLines($decisionPayload);
+            }
+        }
+
         return [];
+    }
+
+    /**
+     * Payload gravado em workflow_runs.context para uma execução de email_approval.
+     * O engine guarda o resumePayload em "{nodeId}.{approved|rejected}.0" quando
+     * o {@see \Aftandilmmd\WorkflowAutomation\Jobs\ResumeWorkflowJob} retoma a
+     * execução.
+     *
+     * @param  array<string, mixed>  $context
+     * @return array<string, mixed>|null
+     */
+    private static function emailApprovalDecisionPayload(array $context, int $nodeId): ?array
+    {
+        foreach (['approved', 'rejected'] as $port) {
+            $payload = data_get($context, "{$nodeId}.{$port}.0")
+                ?? data_get($context, (string) $nodeId.'.'.$port.'.0');
+
+            if (is_array($payload) && $payload !== []) {
+                return $payload;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return list<string>
+     */
+    private static function emailApprovalReadOnlyLines(array $payload): array
+    {
+        $decision = is_string($payload['decision'] ?? null) ? $payload['decision'] : null;
+        $lines = [
+            'Decisão: '.match ($decision) {
+                'approve' => 'Aprovado',
+                'reject' => 'Rejeitado',
+                default => '—',
+            },
+        ];
+
+        $comment = $payload['comment'] ?? null;
+        if (is_string($comment) && mb_trim($comment) !== '') {
+            $lines[] = self::formatPair('Comentário', mb_trim($comment));
+        }
+
+        $decidedAt = $payload['decided_at'] ?? null;
+        if (is_string($decidedAt) && $decidedAt !== '') {
+            try {
+                $decidedAt = \Illuminate\Support\Carbon::parse($decidedAt)
+                    ->timezone(config('app.timezone', 'UTC'))
+                    ->format('d/m/Y H:i:s');
+            } catch (\Throwable) {
+            }
+            $lines[] = self::formatPair('Decidida em', $decidedAt);
+        }
+
+        $decidedBy = $payload['decided_by_email'] ?? null;
+        if (is_string($decidedBy) && mb_trim($decidedBy) !== '') {
+            $lines[] = self::formatPair('Decidida por', mb_trim($decidedBy));
+        }
+
+        return $lines;
     }
 
     /**

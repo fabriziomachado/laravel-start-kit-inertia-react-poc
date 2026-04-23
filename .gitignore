@@ -26,3 +26,6 @@ Homestead.yaml
 /.vscode
 /.zed
 /tmp/
+
+# Capturas geradas por testes Dusk em falha (não versionar)
+/tests/Browser/Screenshots/

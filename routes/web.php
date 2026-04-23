@@ -20,7 +20,9 @@ use App\Http\Controllers\UserListController;
 use App\Http\Controllers\UserPasswordController;
 use App\Http\Controllers\UserProfileController;
 use App\Http\Controllers\UserTwoFactorAuthenticationController;
+use App\Http\Controllers\WorkflowApprovalController;
 use App\Http\Controllers\WorkflowFormController;
+use App\Http\Middleware\RepairHtmlEntityAmpersandsInQueryString;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
@@ -64,6 +66,15 @@ Route::get('/__sybase-ping', function () {
 Route::get('/sybase', SybasePingController::class)->name('debug.sybase');
 
 Route::get('/', fn () => Inertia::render('welcome'))->name('home');
+
+Route::post('workflow-approvals/{run}/{node}/{token}/submit', [WorkflowApprovalController::class, 'submit'])
+    ->middleware([RepairHtmlEntityAmpersandsInQueryString::class, 'signed'])
+    ->name('workflow-approvals.submit');
+
+Route::get('workflow-approvals/{run}/{node}/{token}/{decision}', [WorkflowApprovalController::class, 'fallback'])
+    ->middleware([RepairHtmlEntityAmpersandsInQueryString::class, 'signed'])
+    ->where('decision', 'approve|reject')
+    ->name('workflow-approvals.fallback');
 
 Route::middleware(['auth', 'verified'])->group(function (): void {
     Route::get('dashboard', fn () => Inertia::render('dashboard'))->name('dashboard');
