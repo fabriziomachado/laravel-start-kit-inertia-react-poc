@@ -99,6 +99,8 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         ->name('workflow-forms.submit-chat');
     Route::post('workflow-forms/{token}/chat', [WorkflowFormController::class, 'chat'])
         ->name('workflow-forms.chat');
+    Route::post('workflow-forms/{token}/chat/edit', [WorkflowFormController::class, 'edit'])
+        ->name('workflow-forms.chat.edit');
     Route::post('workflow-forms/{token}/ai-extract', [WorkflowFormController::class, 'aiExtract'])
         ->name('workflow-forms.ai-extract');
     Route::post('workflow-forms/{token}/ai-copilot', [WorkflowFormController::class, 'aiCopilot'])

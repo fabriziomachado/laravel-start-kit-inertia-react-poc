@@ -92,6 +92,65 @@ final class ScriptedChatService
     }
 
     /**
+     * Substitui o conteúdo da resposta do utilizador para um campo já respondido,
+     * mantendo intacta a estrutura da conversa (perguntas e demais respostas).
+     *
+     * @param  list<array<string, mixed>>  $fields
+     * @return array{ok: true, messages: list<array<string, mixed>>}|array{ok: false, errors: array<string, list<string>>}
+     */
+    public function replaceUserMessage(
+        WorkflowFormConversation $conversation,
+        array $fields,
+        string $fieldKey,
+        mixed $rawContent,
+    ): array {
+        $field = $this->fieldByKey($fields, $fieldKey);
+        if ($field === null) {
+            return ['ok' => false, 'errors' => ['chat' => ['Campo inválido.']]];
+        }
+
+        $normalized = $this->normalizeContent($field, $rawContent);
+        $rules = WorkflowFormFieldRules::rulesForSingleField($field);
+        $validator = Validator::make([$fieldKey => $normalized], [$fieldKey => $rules]);
+        if ($validator->fails()) {
+            return ['ok' => false, 'errors' => $validator->errors()->toArray()];
+        }
+
+        $validated = $validator->validated();
+        $value = $validated[$fieldKey] ?? $normalized;
+
+        $messages = $conversation->messages ?? [];
+        $targetIdx = null;
+        for ($i = count($messages) - 1; $i >= 0; $i--) {
+            $row = $messages[$i] ?? null;
+            if (! is_array($row) || ($row['role'] ?? null) !== 'user') {
+                continue;
+            }
+            $meta = $row['meta'] ?? null;
+            if (is_array($meta) && ($meta[self::META_EXPECTING] ?? null) === $fieldKey) {
+                $targetIdx = $i;
+                break;
+            }
+        }
+
+        if ($targetIdx === null) {
+            return ['ok' => false, 'errors' => ['chat' => ['Resposta não encontrada para edição.']]];
+        }
+
+        $messages[$targetIdx]['content'] = $this->userMessageContent($field, $value);
+        $meta = is_array($messages[$targetIdx]['meta'] ?? null) ? $messages[$targetIdx]['meta'] : [];
+        $meta[self::META_EXPECTING] = $fieldKey;
+        $meta['at'] = now()->toIso8601String();
+        $meta['edited'] = true;
+        $messages[$targetIdx]['meta'] = $meta;
+
+        $conversation->messages = $messages;
+        $conversation->save();
+
+        return ['ok' => true, 'messages' => $messages];
+    }
+
+    /**
      * @param  list<array<string, mixed>>  $messages
      */
     public function isReadyForSubmit(array $messages): bool

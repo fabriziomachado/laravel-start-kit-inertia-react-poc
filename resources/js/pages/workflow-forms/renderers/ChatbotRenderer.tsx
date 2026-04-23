@@ -1,5 +1,5 @@
 import { useForm } from '@inertiajs/react';
-import { CheckCircle2, ChevronDown, ChevronUp, SendHorizonal, Sparkles, Workflow } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronUp, Pencil, SendHorizonal, Sparkles, Workflow, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ import {
     chat as chatRoute,
     submitChat as submitChatRoute,
 } from '@/routes/workflow-forms';
+import { edit as editChatRoute } from '@/routes/workflow-forms/chat';
 import type { User } from '@/types/auth';
 import type { ChatAdvancePayload } from '../Show';
 import { mergeInitialData, normalizeChoices, parseSelectOptions } from '../form-helpers';
@@ -145,11 +146,16 @@ export function ChatbotRenderer({
     const [extractOpen, setExtractOpen] = useState(false);
     const [extractText, setExtractText] = useState('');
     const [extractBusy, setExtractBusy] = useState(false);
+    // Estado da edição inline de respostas já dadas na etapa atual.
+    const [editingKey, setEditingKey] = useState<string | null>(null);
+    const [editInput, setEditInput] = useState('');
+    const [editSaving, setEditSaving] = useState(false);
 
     const form = useForm(mergeInitialData(step.fields, prefill));
     const scrollRef = useRef<HTMLDivElement>(null);
     const scrollContentRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
+    const editInputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
     const prevTokenRef = useRef<string>(token);
     const submitInFlight = useRef(false);
     const autoSubmitLatchRef = useRef(false);
@@ -191,6 +197,8 @@ export function ChatbotRenderer({
 
         setReady(isReadyForSubmit(initialMessages));
         setInput('');
+        setEditingKey(null);
+        setEditInput('');
         form.setData(mergeInitialData(step.fields, prefill));
     }, [token]);
 
@@ -382,13 +390,15 @@ export function ChatbotRenderer({
     }, [form, onAdvance, onComplete, token]);
 
     // Quando a etapa fica completa na conversa, submete sem pedir confirmação ao utilizador.
+    // Se o utilizador estiver a editar uma resposta, suspendemos a auto-submissão até
+    // fechar o editor, para evitar avanço involuntário durante a revisão.
     useEffect(() => {
         if (!ready) {
             autoSubmitLatchRef.current = false;
 
             return;
         }
-        if (sending || chatError) {
+        if (sending || chatError || editingKey) {
             return;
         }
         if (autoSubmitLatchRef.current) {
@@ -396,7 +406,76 @@ export function ChatbotRenderer({
         }
         autoSubmitLatchRef.current = true;
         void submitStep();
-    }, [chatError, ready, sending, submitStep, token]);
+    }, [chatError, editingKey, ready, sending, submitStep, token]);
+
+    // Índice inicial do bloco da etapa atual dentro de `history`, para identificar
+    // as mensagens editáveis (apenas as da etapa em curso).
+    const currentBlockStartIdx = useMemo(() => {
+        const lastTransitionIdx = findLastTransitionIndex(history);
+
+        return lastTransitionIdx >= 0 ? lastTransitionIdx + 1 : 0;
+    }, [history]);
+
+    const startEdit = useCallback(
+        (fieldKey: string, currentContent: string) => {
+            setChatError(null);
+            autoSubmitLatchRef.current = false;
+            setEditingKey(fieldKey);
+            setEditInput(currentContent);
+            // Foco diferido para garantir que o input já foi montado.
+            setTimeout(() => editInputRef.current?.focus(), 0);
+        },
+        [],
+    );
+
+    const cancelEdit = useCallback(() => {
+        setEditingKey(null);
+        setEditInput('');
+    }, []);
+
+    const saveEdit = useCallback(async () => {
+        if (!editingKey || editSaving) {
+            return;
+        }
+        const field = step.fields.find((f) => f.key === editingKey) ?? null;
+        // Para campos booleanos não passamos por este editor de texto.
+        if (field?.type === 'boolean') {
+            return;
+        }
+        if (editInput.trim() === '' && field?.type !== 'textarea') {
+            return;
+        }
+        setEditSaving(true);
+        setChatError(null);
+        const res = await postJson<{
+            messages: ChatMessage[];
+            ready_for_submit: boolean;
+            draft_values: Record<string, unknown>;
+        }>(editChatRoute.url(token), {
+            field_key: editingKey,
+            content: editInput,
+        });
+        setEditSaving(false);
+        if (!res.ok) {
+            const err = res.data as { errors?: Record<string, string[]>; message?: string };
+            const first =
+                err.errors?.content?.[0] ??
+                Object.values(err.errors ?? {})[0]?.[0] ??
+                err.message ??
+                'Não foi possível atualizar a resposta.';
+            setChatError(first);
+
+            return;
+        }
+        replaceCurrentBlock(res.data.messages);
+        setReady(res.data.ready_for_submit);
+        const draft = res.data.draft_values ?? {};
+        for (const [k, v] of Object.entries(draft)) {
+            form.setData(k, v as never);
+        }
+        setEditingKey(null);
+        setEditInput('');
+    }, [editInput, editSaving, editingKey, form, replaceCurrentBlock, step.fields, token]);
 
     return (
         <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
@@ -465,6 +544,28 @@ export function ChatbotRenderer({
                         const isActive = !ready && isAssistant && idx === activeIdx && expectingField !== null;
                         const t = formatBubbleTime(m.meta);
 
+                        // Mensagens do utilizador dentro da etapa atual podem ser editadas
+                        // enquanto o processo não avançou (não está a enviar/avançar) e a
+                        // mensagem tem associação a um campo (meta.expecting_field).
+                        const userFieldKey =
+                            !isAssistant && typeof m.meta?.expecting_field === 'string'
+                                ? (m.meta.expecting_field as string)
+                                : null;
+                        const userField = userFieldKey
+                            ? step.fields.find((f) => f.key === userFieldKey) ?? null
+                            : null;
+                        const isInCurrentStep = idx >= currentBlockStartIdx;
+                        const canEditUserMsg =
+                            !isAssistant
+                            && userFieldKey !== null
+                            && userField !== null
+                            && userField.type !== 'boolean'
+                            && isInCurrentStep
+                            && !advancing
+                            && !sending
+                            && editingKey !== userFieldKey;
+                        const isEditingThis = !isAssistant && userFieldKey !== null && editingKey === userFieldKey;
+
                         return (
                             <div
                                 key={`${idx}-${m.role}-${String(m.content).slice(0, 24)}`}
@@ -524,14 +625,16 @@ export function ChatbotRenderer({
 
                                 <div
                                     className={cn(
-                                        'min-w-0',
-                                        isActive ? 'w-full max-w-[min(100%,32rem)]' : 'max-w-[min(100%,28rem)]',
+                                        'group/msg min-w-0',
+                                        isActive || isEditingThis
+                                            ? 'w-full max-w-[min(100%,32rem)]'
+                                            : 'max-w-[min(100%,28rem)]',
                                         !isAssistant && 'order-1',
                                     )}
                                 >
                                     <div
                                         className={cn(
-                                            'rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed shadow-sm',
+                                            'relative rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed shadow-sm',
                                             isAssistant
                                                 ? cn(
                                                       'border border-border/60 bg-card text-card-foreground',
@@ -543,7 +646,19 @@ export function ChatbotRenderer({
                                                   ),
                                         )}
                                     >
-                                        <p className="whitespace-pre-wrap break-words">{m.content}</p>
+                                        {isEditingThis && userField ? (
+                                            <EditableAnswer
+                                                field={userField}
+                                                value={editInput}
+                                                onChange={setEditInput}
+                                                onSave={() => void saveEdit()}
+                                                onCancel={cancelEdit}
+                                                saving={editSaving}
+                                                inputRef={editInputRef}
+                                            />
+                                        ) : (
+                                            <p className="whitespace-pre-wrap break-words">{m.content}</p>
+                                        )}
 
                                         {isActive && expectingField ? (
                                             <InlineWidget
@@ -557,6 +672,23 @@ export function ChatbotRenderer({
                                                 sending={sending}
                                                 inputRef={inputRef}
                                             />
+                                        ) : null}
+
+                                        {canEditUserMsg && userFieldKey ? (
+                                            <button
+                                                type="button"
+                                                onClick={() => startEdit(userFieldKey, m.content)}
+                                                className={cn(
+                                                    'absolute -left-2 top-1/2 -translate-x-full -translate-y-1/2',
+                                                    'inline-flex items-center gap-1 rounded-full border border-border/60 bg-background px-2 py-1 text-[10px] font-medium text-muted-foreground shadow-sm',
+                                                    'opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/msg:opacity-100',
+                                                )}
+                                                aria-label="Editar esta resposta"
+                                                title="Editar esta resposta"
+                                            >
+                                                <Pencil className="size-3" aria-hidden />
+                                                Editar
+                                            </button>
                                         ) : null}
                                     </div>
                                     {t && isLastInGroup ? (
@@ -847,6 +979,192 @@ function InlineWidget({
                     {sending ? <Spinner /> : <SendHorizonal className="size-4" aria-hidden />}
                 </Button>
             </div>
+        </div>
+    );
+}
+
+type EditableAnswerProps = {
+    field: FormField;
+    value: string;
+    onChange: (v: string) => void;
+    onSave: () => void;
+    onCancel: () => void;
+    saving: boolean;
+    inputRef: React.MutableRefObject<HTMLInputElement | HTMLTextAreaElement | null>;
+};
+
+/**
+ * Editor inline para reabrir uma resposta já dada pelo utilizador na etapa
+ * atual. Reutiliza os mesmos controlos de entrada do {@link InlineWidget},
+ * mas em modo de atualização (com Guardar/Cancelar).
+ */
+function EditableAnswer({
+    field,
+    value,
+    onChange,
+    onSave,
+    onCancel,
+    saving,
+    inputRef,
+}: EditableAnswerProps) {
+    const canSave = (() => {
+        if (saving) return false;
+        if (field.type === 'textarea') return true;
+        return value.trim() !== '';
+    })();
+
+    if (field.type === 'select') {
+        return (
+            <div className="flex flex-col gap-2">
+                <select
+                    className={cn(
+                        'h-10 w-full rounded-xl border border-primary-foreground/30 bg-primary-foreground/10 px-3 text-sm text-primary-foreground shadow-xs outline-none transition-colors',
+                        'focus-visible:border-primary-foreground/60 focus-visible:ring-[3px] focus-visible:ring-primary-foreground/30',
+                    )}
+                    value={value}
+                    onChange={(e) => onChange(e.target.value)}
+                    disabled={saving}
+                >
+                    <option value="" disabled>
+                        Escolhe uma opção…
+                    </option>
+                    {parseSelectOptions(field.options).map((opt) => (
+                        <option key={opt} value={opt} className="text-foreground">
+                            {opt}
+                        </option>
+                    ))}
+                </select>
+                <EditActions onSave={onSave} onCancel={onCancel} saving={saving} canSave={value !== ''} />
+            </div>
+        );
+    }
+
+    if (field.type === 'choice_cards') {
+        return (
+            <div className="flex flex-col gap-2">
+                <div className="flex flex-wrap gap-1.5">
+                    {normalizeChoices(field.choices).map((c) => {
+                        const active = c.value === value;
+                        return (
+                            <button
+                                key={c.value}
+                                type="button"
+                                onClick={() => onChange(c.value)}
+                                disabled={saving}
+                                className={cn(
+                                    'rounded-full border px-3 py-1 text-xs transition-colors',
+                                    active
+                                        ? 'border-primary-foreground bg-primary-foreground text-primary'
+                                        : 'border-primary-foreground/40 bg-primary-foreground/10 text-primary-foreground hover:bg-primary-foreground/20',
+                                )}
+                            >
+                                {c.label}
+                            </button>
+                        );
+                    })}
+                </div>
+                <EditActions onSave={onSave} onCancel={onCancel} saving={saving} canSave={value !== ''} />
+            </div>
+        );
+    }
+
+    if (field.type === 'textarea') {
+        return (
+            <div className="flex flex-col gap-2">
+                <textarea
+                    ref={(el) => {
+                        inputRef.current = el;
+                    }}
+                    value={value}
+                    onChange={(e) => onChange(e.target.value)}
+                    rows={2}
+                    disabled={saving}
+                    className={cn(
+                        'max-h-40 min-h-[3rem] w-full resize-y rounded-xl border border-primary-foreground/30 bg-primary-foreground/10 px-3 py-2 text-sm text-primary-foreground outline-none',
+                        'placeholder:text-primary-foreground/60 focus-visible:border-primary-foreground/60 focus-visible:ring-[3px] focus-visible:ring-primary-foreground/30',
+                    )}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                            e.preventDefault();
+                            onSave();
+                        }
+                        if (e.key === 'Escape') {
+                            e.preventDefault();
+                            onCancel();
+                        }
+                    }}
+                />
+                <EditActions onSave={onSave} onCancel={onCancel} saving={saving} canSave={canSave} />
+            </div>
+        );
+    }
+
+    const inputType = field.type === 'email' ? 'email' : field.type === 'number' ? 'number' : 'text';
+
+    return (
+        <div className="flex flex-col gap-2">
+            <Input
+                ref={(el) => {
+                    inputRef.current = el;
+                }}
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                type={inputType}
+                disabled={saving}
+                className={cn(
+                    'h-10 rounded-xl border-primary-foreground/30 bg-primary-foreground/10 text-primary-foreground shadow-none',
+                    'placeholder:text-primary-foreground/60 focus-visible:border-primary-foreground/60 focus-visible:ring-primary-foreground/30',
+                )}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        onSave();
+                    }
+                    if (e.key === 'Escape') {
+                        e.preventDefault();
+                        onCancel();
+                    }
+                }}
+            />
+            <EditActions onSave={onSave} onCancel={onCancel} saving={saving} canSave={canSave} />
+        </div>
+    );
+}
+
+function EditActions({
+    onSave,
+    onCancel,
+    saving,
+    canSave,
+}: {
+    onSave: () => void;
+    onCancel: () => void;
+    saving: boolean;
+    canSave: boolean;
+}) {
+    return (
+        <div className="flex items-center justify-end gap-1.5">
+            <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-7 rounded-full px-3 text-xs text-primary-foreground hover:bg-primary-foreground/20 hover:text-primary-foreground"
+                disabled={saving}
+                onClick={onCancel}
+            >
+                <X className="size-3.5" aria-hidden />
+                Cancelar
+            </Button>
+            <Button
+                type="button"
+                size="sm"
+                className="h-7 rounded-full bg-primary-foreground px-3 text-xs text-primary hover:bg-primary-foreground/90"
+                disabled={!canSave}
+                onClick={onSave}
+            >
+                {saving ? <Spinner /> : <CheckCircle2 className="size-3.5" aria-hidden />}
+                Guardar
+            </Button>
         </div>
     );
 }

@@ -331,6 +331,52 @@ final class WorkflowFormController
         ]);
     }
 
+    public function edit(
+        Request $request,
+        string $token,
+        ScriptedChatService $scriptedChat,
+    ): JsonResponse {
+        $nodeRun = $this->findWaitingFormNodeRunByToken($token);
+        if ($nodeRun === null) {
+            abort(404);
+        }
+
+        Gate::authorize('view', $nodeRun->workflowRun);
+
+        $main = $nodeRun->output['main'][0] ?? [];
+        $fields = is_array($main['fields'] ?? null) ? $main['fields'] : [];
+
+        $validated = $request->validate([
+            'field_key' => ['required', 'string'],
+            'content' => ['nullable'],
+        ]);
+
+        $conversation = WorkflowFormConversation::query()->firstOrCreate(
+            [
+                'workflow_run_id' => $nodeRun->workflow_run_id,
+                'workflow_node_run_id' => $nodeRun->id,
+            ],
+            ['messages' => []],
+        );
+
+        $result = $scriptedChat->replaceUserMessage(
+            $conversation,
+            $fields,
+            $validated['field_key'],
+            $validated['content'] ?? null,
+        );
+
+        if (! $result['ok']) {
+            return response()->json(['errors' => $result['errors']], 422);
+        }
+
+        return response()->json([
+            'messages' => $result['messages'],
+            'ready_for_submit' => $scriptedChat->isReadyForSubmit($result['messages']),
+            'draft_values' => $scriptedChat->draftValuesFromMessages($fields, $result['messages']),
+        ]);
+    }
+
     public function aiExtract(
         Request $request,
         string $token,
