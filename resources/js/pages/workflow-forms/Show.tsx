@@ -1,15 +1,9 @@
 import { Head, router, useForm, usePage, type InertiaFormProps } from '@inertiajs/react';
 import { Clock, ListTree, MessageSquare, ScrollText, Sparkles, type LucideIcon } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useDefaultLayout } from 'react-resizable-panels';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import type { SharedData } from '@/types/page';
-import {
-    ResizableHandle,
-    ResizablePanel,
-    ResizablePanelGroup,
-} from '@/components/ui/resizable';
 import { Separator } from '@/components/ui/separator';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import AppLayout from '@/layouts/app-layout';
@@ -18,7 +12,6 @@ import { dashboard } from '@/routes';
 import type { BreadcrumbItem } from '@/types';
 import { mergeInitialData } from './form-helpers';
 import { AiCopilotTab } from './progress/AiCopilotTab';
-import { RendererToggle, RendererToggleLabel } from './RendererToggle';
 import { ChatbotRenderer } from './renderers/ChatbotRenderer';
 import type { StepRendererProps } from './renderers/types';
 import { WizardRenderer } from './renderers/WizardRenderer';
@@ -31,35 +24,6 @@ import type {
     TimelineHeadingRow,
     TimelineStepRow,
 } from './types';
-
-const MIN_PROGRESS_PANEL_PX = 280;
-
-const MAX_PROGRESS_PANEL_PX = 720;
-
-const ssrSafeLocalStorage = {
-    getItem: (key: string): string | null => {
-        if (typeof window === 'undefined') {
-            return null;
-        }
-
-        try {
-            return window.localStorage.getItem(key);
-        } catch {
-            return null;
-        }
-    },
-    setItem: (key: string, value: string): void => {
-        if (typeof window === 'undefined') {
-            return;
-        }
-
-        try {
-            window.localStorage.setItem(key, value);
-        } catch {
-            /* ignore */
-        }
-    },
-} as const;
 
 const PROGRESS_SIDE_TABS: {
     id: ProgressSideTabId;
@@ -111,6 +75,34 @@ function formatShortDate(iso: string | null): string {
         }).format(new Date(iso));
     } catch {
         return '';
+    }
+}
+
+/** Data e hora numa linha para a lista compacta do painel de andamento. */
+function formatCompactStepTimestamp(
+    state: ProgressStep['state'],
+    completedAt: string | null,
+): string {
+    if (state === 'current') {
+        return 'Agora';
+    }
+    if (state === 'pending') {
+        return '—';
+    }
+    if (!completedAt) {
+        return '—';
+    }
+    try {
+        return new Intl.DateTimeFormat('pt-PT', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+        }).format(new Date(completedAt));
+    } catch {
+        return '—';
     }
 }
 
@@ -237,34 +229,29 @@ function ProgressPanel({
     formToken: string;
     copilotAvailable: boolean;
 }) {
-    const [scope, setScope] = useState<'all' | 'forms'>('all');
+    const [timelineView, setTimelineView] = useState<'complete' | 'compact'>(
+        'complete',
+    );
     const [progressTab, setProgressTab] =
         useState<ProgressSideTabId>('details');
 
-    const formStepCount = useMemo(
-        () => progress.steps.filter((s) => s.node_key === 'form_step').length,
-        [progress.steps],
-    );
+    const showTimelineViewToggle = progress.steps.length >= 2;
 
-    const showStepFilter = useMemo(
-        () =>
-            formStepCount > 0 &&
-            progress.steps.some((s) => s.node_key !== 'form_step'),
-        [formStepCount, progress.steps],
-    );
-
-    const displayedSteps = useMemo(() => {
-        if (scope === 'forms') {
-            return progress.steps.filter((s) => s.node_key === 'form_step');
-        }
-
-        return progress.steps;
-    }, [progress.steps, scope]);
+    const displayedSteps = progress.steps;
 
     const timelineRows = useMemo((): (
         | TimelineHeadingRow
         | TimelineStepRow
     )[] => {
+        if (timelineView === 'compact') {
+            return displayedSteps.map((step, index) => ({
+                type: 'step' as const,
+                step,
+                displayIndex: index + 1,
+                reactKey: `step-${step.node_id}`,
+            }));
+        }
+
         const out: (TimelineHeadingRow | TimelineStepRow)[] = [];
         let prevSectionKey: string | null = null;
 
@@ -287,7 +274,7 @@ function ProgressPanel({
         });
 
         return out;
-    }, [displayedSteps]);
+    }, [displayedSteps, timelineView]);
 
     const stepOnlyRows = useMemo(
         () =>
@@ -331,13 +318,13 @@ function ProgressPanel({
                             ) : null}
                         </header>
 
-                        {showStepFilter ? (
+                        {showTimelineViewToggle ? (
                             <ToggleGroup
                                 type="single"
-                                value={scope}
+                                value={timelineView}
                                 onValueChange={(v) => {
-                                    if (v === 'all' || v === 'forms') {
-                                        setScope(v);
+                                    if (v === 'complete' || v === 'compact') {
+                                        setTimelineView(v);
                                     }
                                 }}
                                 variant="outline"
@@ -345,16 +332,16 @@ function ProgressPanel({
                                 className="grid w-full grid-cols-2 gap-0 shadow-none"
                             >
                                 <ToggleGroupItem
-                                    value="all"
+                                    value="complete"
                                     className="text-xs"
                                 >
-                                    Todas as etapas
+                                    Completo
                                 </ToggleGroupItem>
                                 <ToggleGroupItem
-                                    value="forms"
+                                    value="compact"
                                     className="text-xs"
                                 >
-                                    Só formulários
+                                    Compacto
                                 </ToggleGroupItem>
                             </ToggleGroup>
                         ) : null}
@@ -379,12 +366,6 @@ function ProgressPanel({
 
                                 const s = row.step;
                                 const b = stateBadge(s.state);
-                                const stepNo = String(
-                                    row.displayIndex,
-                                ).padStart(2, '0');
-                                const totalShown = String(
-                                    displayedSteps.length,
-                                ).padStart(2, '0');
                                 const stepIndexAmongSteps =
                                     stepOnlyRows.findIndex(
                                         (r) => r.step.node_id === s.node_id,
@@ -393,6 +374,49 @@ function ProgressPanel({
                                     stepIndexAmongSteps >= 0 &&
                                     stepIndexAmongSteps ===
                                         stepOnlyRows.length - 1;
+
+                                if (timelineView === 'compact') {
+                                    return (
+                                        <div
+                                            key={row.reactKey}
+                                            role="listitem"
+                                            className={cn(
+                                                'flex min-w-0 items-center gap-3 py-2',
+                                                !isLastStep &&
+                                                    'border-b border-border/60',
+                                            )}
+                                        >
+                                            <span className="w-[9.25rem] shrink-0 font-mono text-[11px] leading-tight tabular-nums text-muted-foreground">
+                                                {formatCompactStepTimestamp(
+                                                    s.state,
+                                                    s.completed_at,
+                                                )}
+                                            </span>
+                                            <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                                                {s.label}
+                                            </p>
+                                            <Badge
+                                                variant={b.variant}
+                                                className={cn(
+                                                    'shrink-0 rounded-full px-2.5 py-0 text-[10px] font-medium uppercase',
+                                                    s.state === 'completed' &&
+                                                        'border-emerald-500/40 bg-emerald-500/12 text-emerald-900 dark:border-emerald-400/35 dark:bg-emerald-500/15 dark:text-emerald-100',
+                                                    s.state === 'pending' &&
+                                                        'border-amber-200/80 bg-amber-50 text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100',
+                                                )}
+                                            >
+                                                {b.label}
+                                            </Badge>
+                                        </div>
+                                    );
+                                }
+
+                                const stepNo = String(
+                                    row.displayIndex,
+                                ).padStart(2, '0');
+                                const totalShown = String(
+                                    displayedSteps.length,
+                                ).padStart(2, '0');
 
                                 return (
                                     <div
@@ -688,6 +712,9 @@ function WorkflowFormShowInner({
     const [activeProgress, setActiveProgress] = useState(progress);
     const [activeConversation, setActiveConversation] = useState(conversation);
 
+    /** Incrementado em cada avanço pelo chat; o renderer usa para anexar o segmento sem confundir com navegação Inertia (Strict Mode incluído). */
+    const [chatAdvanceSeq, setChatAdvanceSeq] = useState(0);
+
     useEffect(() => {
         setActiveToken(token);
         setActiveStep(step);
@@ -696,6 +723,9 @@ function WorkflowFormShowInner({
         setActivePreviousToken(previous_token);
         setActiveProgress(progress);
         setActiveConversation(conversation);
+        form.setData(mergeInitialData(step.fields, prefill));
+        // Só quando o token da página (Inertia) muda — não repetir quando o chat atualiza estado local.
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- props alinhadas com `token`
     }, [token]);
 
     const breadcrumbs: BreadcrumbItem[] = useMemo(
@@ -713,25 +743,61 @@ function WorkflowFormShowInner({
         'wizard' | 'chatbot'
     >(preferences.workflow_form_renderer);
 
-    const [lgUp, setLgUp] = useState(
-        () =>
-            typeof window !== 'undefined' &&
-            window.matchMedia('(min-width: 1024px)').matches,
-    );
-
     useEffect(() => {
         setRenderer(preferences.workflow_form_renderer);
     }, [preferences.workflow_form_renderer, activeToken]);
 
+    const handleChatDraftUpdate = useCallback(
+        (payload: { messages: ChatMessage[]; draftValues: Record<string, unknown> }) => {
+            // Substituir só o bloco da etapa atual no cumulativo (o API devolve o segmento).
+            setActiveConversation((prev) => {
+                const rows = [...prev.messages] as { role: string; content?: unknown }[];
+                let lastSys = -1;
+                for (let i = rows.length - 1; i >= 0; i--) {
+                    if (rows[i]?.role === 'system') {
+                        lastSys = i;
+                        break;
+                    }
+                }
+                const head = lastSys >= 0 ? prev.messages.slice(0, lastSys + 1) : [];
+
+                return { ...prev, messages: [...head, ...payload.messages] };
+            });
+            setActivePrefill((prev) => ({ ...prev, ...payload.draftValues }));
+            for (const [k, v] of Object.entries(payload.draftValues)) {
+                form.setData(k, v as never);
+            }
+        },
+        [form],
+    );
+
     const handleChatAdvance = useCallback(
         (next: ChatAdvancePayload) => {
+            setChatAdvanceSeq((n) => n + 1);
             setActiveToken(next.token);
             setActiveStep(next.step);
             setActiveRunId(next.run_id);
             setActivePrefill(next.prefill);
             setActivePreviousToken(next.previous_token);
             setActiveProgress(next.progress);
-            setActiveConversation(next.conversation);
+            // Manter no pai o mesmo cumulativo que o chat mostra, para um eventual remount
+            // não perder etapas anteriores (o JSON de avanço traz só o segmento da etapa nova).
+            setActiveConversation((prev) => {
+                const transition = {
+                    role: 'system' as const,
+                    content: next.step.title,
+                    meta: { at: new Date().toISOString() },
+                };
+                return {
+                    id: next.conversation.id,
+                    messages: [
+                        ...prev.messages,
+                        transition,
+                        ...next.conversation.messages,
+                    ] as ChatMessage[],
+                };
+            });
+            form.setData(mergeInitialData(next.step.fields, next.prefill));
             if (typeof window !== 'undefined' && window.history?.replaceState) {
                 try {
                     window.history.replaceState(
@@ -744,7 +810,7 @@ function WorkflowFormShowInner({
                 }
             }
         },
-        [],
+        [form],
     );
 
     const handleWorkflowComplete = useCallback(
@@ -754,25 +820,6 @@ function WorkflowFormShowInner({
         [],
     );
 
-    useEffect(() => {
-        const mq = window.matchMedia('(min-width: 1024px)');
-        const fn = () => {
-            setLgUp(mq.matches);
-        };
-        fn();
-        mq.addEventListener('change', fn);
-
-        return () => {
-            mq.removeEventListener('change', fn);
-        };
-    }, []);
-
-    const layoutPersistence = useDefaultLayout({
-        id: 'workflow-form-resize',
-        panelIds: ['workflow-form', 'workflow-progress'],
-        storage: ssrSafeLocalStorage,
-    });
-
     const wizardProps: StepRendererProps = {
         token: activeToken,
         step: activeStep,
@@ -781,18 +828,37 @@ function WorkflowFormShowInner({
         previous_token: activePreviousToken,
         form: form as InertiaFormProps<Record<string, unknown>>,
         hasChoiceCards,
+        interactionMode: renderer,
+        onInteractionModeChange: setRenderer,
     };
 
     const primaryColumn = (
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            <div className="shrink-0 border-b border-border bg-muted/20 px-4 py-3 lg:px-8">
-                <RendererToggleLabel className="mb-2" />
-                <RendererToggle value={renderer} onChange={setRenderer} />
-            </div>
-            <div className="min-h-0 flex-1">
-                {renderer === 'wizard' ? (
+            <div className="relative min-h-0 min-w-0 flex-1">
+                {/*
+                  Manter wizard e chat montados: o chat acumula histórico entre
+                  etapas em estado local; desmontar ao alternar apagava a conversa.
+                */}
+                <div
+                    className={cn(
+                        'absolute inset-0 flex min-h-0 min-w-0 flex-col overflow-hidden',
+                        renderer === 'wizard'
+                            ? 'z-10'
+                            : 'pointer-events-none invisible z-0',
+                    )}
+                    aria-hidden={renderer !== 'wizard'}
+                >
                     <WizardRenderer key={activeToken} {...wizardProps} />
-                ) : (
+                </div>
+                <div
+                    className={cn(
+                        'absolute inset-0 flex min-h-0 min-w-0 flex-col overflow-hidden',
+                        renderer === 'chatbot'
+                            ? 'z-10'
+                            : 'pointer-events-none invisible z-0',
+                    )}
+                    aria-hidden={renderer !== 'chatbot'}
+                >
                     <ChatbotRenderer
                         token={activeToken}
                         step={activeStep}
@@ -807,8 +873,12 @@ function WorkflowFormShowInner({
                         workflowName={activeProgress?.workflow_name ?? null}
                         onAdvance={handleChatAdvance}
                         onComplete={handleWorkflowComplete}
+                        onDraftUpdate={handleChatDraftUpdate}
+                        chatAdvanceSeq={chatAdvanceSeq}
+                        interactionMode={renderer}
+                        onInteractionModeChange={setRenderer}
                     />
-                )}
+                </div>
             </div>
         </div>
     );
@@ -816,55 +886,21 @@ function WorkflowFormShowInner({
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={activeStep.title} />
-            <div className="flex min-h-0 flex-1 flex-col lg:max-h-[calc(100svh-4rem-var(--impersonation-banner-offset,0px))] lg:min-h-0">
-                {lgUp ? (
-                    <ResizablePanelGroup
-                        orientation="horizontal"
-                        className="flex min-h-0 flex-1"
-                        defaultLayout={layoutPersistence.defaultLayout}
-                        onLayoutChanged={layoutPersistence.onLayoutChanged}
-                    >
-                        <ResizablePanel
-                            id="workflow-form"
-                            className="flex min-h-0 min-w-0"
-                            minSize="24%"
-                        >
-                            {primaryColumn}
-                        </ResizablePanel>
-                        <ResizableHandle
-                            withHandle
-                            className="bg-border/60"
-                            aria-label="Redimensionar painel de andamento"
-                        />
-                        <ResizablePanel
-                            id="workflow-progress"
-                            className="flex min-h-0 min-w-0"
-                            minSize={`${MIN_PROGRESS_PANEL_PX}px`}
-                            maxSize={`${MAX_PROGRESS_PANEL_PX}px`}
-                        >
-                            <ProgressPanel
-                                progress={activeProgress}
-                                run_id={activeRunId}
-                                formToken={activeToken}
-                                copilotAvailable={
-                                    workflow_form_copilot_available
-                                }
-                            />
-                        </ResizablePanel>
-                    </ResizablePanelGroup>
-                ) : (
-                    <div className="flex min-h-0 flex-1 flex-col">
-                        {primaryColumn}
-                        <ProgressPanel
-                            progress={activeProgress}
-                            run_id={activeRunId}
-                            formToken={activeToken}
-                            copilotAvailable={
-                                workflow_form_copilot_available
-                            }
-                        />
-                    </div>
-                )}
+            {/*
+              Um único pai para o formulário + andamento (flex responsivo). Evitar trocar
+              ResizablePanel vs div ao cruzar `lg:` — isso desmontava o ChatbotRenderer e
+              reinicializava o histórico só com o segmento da etapa (conversa “perdida”).
+            */}
+            <div className="flex min-h-0 flex-1 flex-col lg:max-h-[calc(100svh-4rem-var(--impersonation-banner-offset,0px))] lg:flex-row lg:min-h-0">
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col">{primaryColumn}</div>
+                <aside className="flex min-h-0 w-full shrink-0 flex-col border-t border-border bg-background lg:max-h-none lg:max-w-[720px] lg:min-w-[280px] lg:w-[min(38vw,720px)] lg:border-t-0 lg:border-l">
+                    <ProgressPanel
+                        progress={activeProgress}
+                        run_id={activeRunId}
+                        formToken={activeToken}
+                        copilotAvailable={workflow_form_copilot_available}
+                    />
+                </aside>
             </div>
         </AppLayout>
     );
