@@ -11,7 +11,10 @@ use Aftandilmmd\WorkflowAutomation\Models\WorkflowNode;
 use Aftandilmmd\WorkflowAutomation\Models\WorkflowNodeRun;
 use Aftandilmmd\WorkflowAutomation\Models\WorkflowRun;
 use App\Models\User;
+use App\Models\WorkflowFormConversation;
+use App\Services\Workflow\ScriptedChatService;
 use Illuminate\Support\Collection;
+use Throwable;
 
 final class WorkflowFormProgress
 {
@@ -116,32 +119,254 @@ final class WorkflowFormProgress
     /**
      * Valores já guardados em workflow_runs.context para repor campos ao voltar atrás.
      *
+     * Quando há conversa de chat em curso, mescla também o rascunho derivado das
+     * mensagens (campos ainda não refletidos em context até submeter a etapa).
+     *
      * @param  list<array<string, mixed>>  $fields
+     * @param  list<array<string, mixed>>|null  $conversationMessages
      * @return array<string, mixed>
      */
-    public static function prefillForFields(WorkflowRun $run, WorkflowNodeRun $formNodeRun, array $fields): array
-    {
+    public static function prefillForFields(
+        WorkflowRun $run,
+        WorkflowNodeRun $formNodeRun,
+        array $fields,
+        ?array $conversationMessages = null,
+        ?ScriptedChatService $scriptedChat = null,
+    ): array {
         $nodeId = $formNodeRun->node_id;
         $saved = data_get($run->context, "{$nodeId}.main.0")
             ?? data_get($run->context, (string) $nodeId.'.main.0');
 
-        if (! is_array($saved)) {
-            return [];
+        $prefill = [];
+        if (is_array($saved)) {
+            foreach ($fields as $field) {
+                if (! is_array($field) || ! isset($field['key'])) {
+                    continue;
+                }
+                $key = (string) $field['key'];
+                if (! array_key_exists($key, $saved)) {
+                    continue;
+                }
+                $prefill[$key] = $saved[$key];
+            }
         }
 
-        $prefill = [];
-        foreach ($fields as $field) {
-            if (! is_array($field) || ! isset($field['key'])) {
-                continue;
+        if ($scriptedChat instanceof ScriptedChatService && is_array($conversationMessages) && $conversationMessages !== []) {
+            foreach ($scriptedChat->draftValuesFromMessages($fields, $conversationMessages) as $key => $value) {
+                $key = (string) $key;
+                if (! array_key_exists($key, $prefill)) {
+                    $prefill[$key] = $value;
+                }
             }
-            $key = (string) $field['key'];
-            if (! array_key_exists($key, $saved)) {
-                continue;
-            }
-            $prefill[$key] = $saved[$key];
         }
 
         return $prefill;
+    }
+
+    /**
+     * Concatena mensagens guardadas em {@see WorkflowFormConversation} de todas as
+     * etapas form_step até à atual (inclusive), com separadores alinhados ao
+     * {@see \App\Http\Controllers\WorkflowFormController} / ChatbotRenderer (role system + título).
+     *
+     * Usado no GET Inertia para o utilizador ver o histórico completo após recarregar ou
+     * abrir o URL da etapa; o JSON de avanço no chat continua a enviar só o segmento atual.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public static function cumulativeFormChatMessages(
+        WorkflowRun $run,
+        Workflow $workflow,
+        WorkflowNodeRun $currentFormNodeRun,
+        WorkflowFormConversation $currentConversation,
+    ): array {
+        $workflow->loadMissing(['nodes', 'edges']);
+        $ordered = self::orderedNodes($workflow);
+        $currentFields = self::fieldsFromNodeRunMain($currentFormNodeRun);
+        $currentNodeRunId = (int) $currentConversation->workflow_node_run_id;
+
+        if ($ordered->isEmpty()) {
+            return self::enrichChatMessagesWithStepContext(
+                self::normalizeChatMessageList($currentConversation->messages ?? []),
+                $currentNodeRunId,
+                $currentFields,
+            );
+        }
+
+        $currentNodeId = $currentFormNodeRun->node_id;
+        $currentIndex = $ordered->search(static fn (WorkflowNode $n): bool => $n->id === $currentNodeId);
+        if ($currentIndex === false) {
+            return self::enrichChatMessagesWithStepContext(
+                self::normalizeChatMessageList($currentConversation->messages ?? []),
+                $currentNodeRunId,
+                $currentFields,
+            );
+        }
+
+        $out = [];
+        $values = $ordered->values();
+
+        for ($i = 0; $i <= (int) $currentIndex; $i++) {
+            $node = $values->get($i);
+            if (! $node instanceof WorkflowNode || $node->node_key !== 'form_step') {
+                continue;
+            }
+
+            if ($node->id === $currentNodeId) {
+                $messages = self::normalizeChatMessageList($currentConversation->messages ?? []);
+                $segmentNodeRunId = $currentNodeRunId;
+                $segmentFields = $currentFields;
+            } else {
+                $priorRun = WorkflowNodeRun::query()
+                    ->where('workflow_run_id', $run->id)
+                    ->where('node_id', $node->id)
+                    ->where('status', NodeRunStatus::Completed)
+                    ->orderByDesc('id')
+                    ->first();
+
+                if ($priorRun === null) {
+                    continue;
+                }
+
+                $conv = WorkflowFormConversation::query()
+                    ->where('workflow_run_id', $run->id)
+                    ->where('workflow_node_run_id', $priorRun->id)
+                    ->first();
+
+                $messages = $conv !== null ? self::normalizeChatMessageList($conv->messages ?? []) : [];
+                $segmentNodeRunId = $conv !== null ? (int) $conv->workflow_node_run_id : (int) $priorRun->id;
+                $segmentFields = self::fieldsFromNodeRunMain($priorRun);
+            }
+
+            if ($messages === []) {
+                continue;
+            }
+
+            if ($out !== []) {
+                $out[] = [
+                    'role' => 'system',
+                    'content' => self::nodeLabel($node),
+                    'meta' => ['at' => now()->toIso8601String()],
+                ];
+            }
+
+            foreach (self::enrichChatMessagesWithStepContext($messages, $segmentNodeRunId, $segmentFields) as $row) {
+                $out[] = $row;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $fields
+     * @return list<array<string, mixed>>
+     */
+    private static function enrichChatMessagesWithStepContext(
+        array $messages,
+        int $workflowNodeRunId,
+        array $fields,
+    ): array {
+        $out = [];
+        foreach ($messages as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $out[] = self::enrichChatMessageRowForStep($row, $workflowNodeRunId, $fields);
+        }
+
+        return $out;
+    }
+
+    /**
+     * Garante `workflow_node_run_id` e metadados de campo nas bolhas do utilizador
+     * para edição no histórico cumulativo (mensagens antigas gravadas antes destes metadados).
+     *
+     * @param  array<string, mixed>  $row
+     * @param  list<array<string, mixed>>  $fields
+     * @return array<string, mixed>
+     */
+    private static function enrichChatMessageRowForStep(array $row, int $workflowNodeRunId, array $fields): array
+    {
+        if (($row['role'] ?? null) !== 'user') {
+            return $row;
+        }
+
+        $meta = is_array($row['meta'] ?? null) ? $row['meta'] : [];
+        if (! isset($meta['workflow_node_run_id'])) {
+            $meta['workflow_node_run_id'] = $workflowNodeRunId;
+        }
+
+        $key = $meta['expecting_field'] ?? null;
+        if (is_string($key) && $key !== '') {
+            foreach ($fields as $f) {
+                if (! is_array($f) || (string) ($f['key'] ?? '') !== $key) {
+                    continue;
+                }
+                if (! isset($meta['field_type'])) {
+                    $meta['field_type'] = (string) ($f['type'] ?? 'string');
+                }
+                if (! isset($meta['field_label'])) {
+                    $meta['field_label'] = (string) ($f['label'] ?? $key);
+                }
+
+                $ftype = (string) ($meta['field_type'] ?? ($f['type'] ?? 'string'));
+                if ($ftype === 'select' && ! isset($meta['field_options'])) {
+                    $opt = $f['options'] ?? '';
+                    $meta['field_options'] = is_string($opt) ? $opt : (is_scalar($opt) ? (string) $opt : '');
+                }
+                if ($ftype === 'choice_cards' && ! isset($meta['field_choices'])) {
+                    $raw = $f['choices'] ?? [];
+                    $meta['field_choices'] = self::normalizeChoicesArrayForMeta(is_array($raw) ? $raw : []);
+                }
+
+                break;
+            }
+        }
+
+        $row['meta'] = $meta;
+
+        return $row;
+    }
+
+    /**
+     * @param  list<mixed>  $raw
+     * @return list<array<string, mixed>>
+     */
+    private static function normalizeChoicesArrayForMeta(array $raw): array
+    {
+        $out = [];
+        foreach ($raw as $c) {
+            if (! is_array($c)) {
+                continue;
+            }
+            $value = (string) ($c['value'] ?? '');
+            if ($value === '') {
+                continue;
+            }
+            $row = [
+                'value' => $value,
+                'label' => (string) ($c['label'] ?? $value),
+            ];
+            if (isset($c['description']) && is_string($c['description'])) {
+                $row['description'] = $c['description'];
+            }
+            if (isset($c['icon']) && is_string($c['icon'])) {
+                $row['icon'] = $c['icon'];
+            }
+            $out[] = $row;
+        }
+
+        return $out;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private static function fieldsFromNodeRunMain(WorkflowNodeRun $nodeRun): array
+    {
+        $main = $nodeRun->output['main'][0] ?? [];
+
+        return is_array($main['fields'] ?? null) ? $main['fields'] : [];
     }
 
     /**
@@ -242,6 +467,25 @@ final class WorkflowFormProgress
         }
 
         return $sections;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private static function normalizeChatMessageList(mixed $messages): array
+    {
+        if (! is_array($messages)) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($messages as $row) {
+            if (is_array($row)) {
+                $out[] = $row;
+            }
+        }
+
+        return $out;
     }
 
     private static function resumeTokenForFormNode(WorkflowRun $run, int $nodeId): ?string
@@ -495,7 +739,7 @@ final class WorkflowFormProgress
                 $decidedAt = \Illuminate\Support\Carbon::parse($decidedAt)
                     ->timezone(config('app.timezone', 'UTC'))
                     ->format('d/m/Y H:i:s');
-            } catch (\Throwable) {
+            } catch (Throwable) {
             }
             $lines[] = self::formatPair('Decidida em', $decidedAt);
         }

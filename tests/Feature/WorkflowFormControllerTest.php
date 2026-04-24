@@ -8,6 +8,7 @@ use Aftandilmmd\WorkflowAutomation\Models\Workflow;
 use App\Flows\WorkflowStarterPayload;
 use App\Models\User;
 use Database\Seeders\WorkflowFormWizardExampleSeeder;
+use Inertia\Testing\AssertableInertia;
 
 it('mostra o passo do formulário para um token válido', function (): void {
     $this->seed(WorkflowFormWizardExampleSeeder::class);
@@ -44,6 +45,80 @@ it('mostra o passo do formulário para um token válido', function (): void {
             ->has('conversation.messages')
             ->has('workflow_form_ai_extract_available')
             ->has('workflow_form_copilot_available'));
+});
+
+it('no segundo passo o show Inertia inclui histórico de chat cumulativo da primeira etapa', function (): void {
+    $this->seed(WorkflowFormWizardExampleSeeder::class);
+
+    $user = User::factory()->create();
+    $run = app(GraphExecutor::class)->execute(
+        Workflow::query()->where('name', WorkflowFormWizardExampleSeeder::WORKFLOW_NAME)->firstOrFail(),
+        WorkflowStarterPayload::forUser($user),
+    );
+    $token1 = $run->nodeRuns()->orderByDesc('id')->first()?->output['main'][0]['resume_token'];
+    expect($token1)->toBeString();
+
+    $this->actingAs($user)
+        ->postJson(route('workflow-forms.chat', ['token' => $token1]), ['content' => 'Ana Histórico Chat'])
+        ->assertOk();
+
+    $this->actingAs($user)
+        ->postJson(route('workflow-forms.chat', ['token' => $token1]), ['content' => 'ana.historico@example.com'])
+        ->assertOk();
+
+    $advance = $this->actingAs($user)
+        ->postJson(route('workflow-forms.submit-chat', ['token' => $token1]), [
+            'name' => 'Ana Histórico Chat',
+            'email' => 'ana.historico@example.com',
+        ]);
+
+    $advance->assertOk();
+    $token2 = $advance->json('next.token');
+    expect($token2)->toBeString()->not->toBe($token1);
+
+    $show = $this->actingAs($user)
+        ->get(route('workflow-forms.show', ['token' => $token2]));
+
+    $show->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('step.title', 'Forma de ingresso.')
+            ->has('conversation.messages'));
+
+    $pageProps = json_decode(json_encode($show->viewData('page')), true);
+    expect($pageProps)->toBeArray();
+    $messagesPayload = data_get($pageProps, 'props.conversation.messages');
+
+    expect($messagesPayload)->toBeArray()->not->toBe([]);
+    $encoded = json_encode($messagesPayload, JSON_THROW_ON_ERROR);
+    expect($encoded)->toContain('Ana Histórico Chat');
+    expect($encoded)->toContain('ana.historico@example.com');
+    expect(collect($messagesPayload)->pluck('role')->contains('system'))->toBeTrue();
+});
+
+it('após resposta no chat, o show inclui o rascunho no prefill para alternar para o wizard', function (): void {
+    $this->seed(WorkflowFormWizardExampleSeeder::class);
+
+    $user = User::factory()->create();
+    $run = app(GraphExecutor::class)->execute(
+        Workflow::query()->where('name', WorkflowFormWizardExampleSeeder::WORKFLOW_NAME)->firstOrFail(),
+        WorkflowStarterPayload::forUser($user),
+    );
+    $token = $run->nodeRuns()->orderByDesc('id')->first()?->output['main'][0]['resume_token'];
+    expect($token)->toBeString();
+
+    $this->actingAs($user)
+        ->postJson(route('workflow-forms.chat', ['token' => $token]), [
+            'content' => 'Ana Pelo Chat',
+        ])
+        ->assertOk()
+        ->assertJsonPath('draft_values.name', 'Ana Pelo Chat');
+
+    $this->actingAs($user)
+        ->get(route('workflow-forms.show', ['token' => $token]))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('prefill.name', 'Ana Pelo Chat')
+            ->missing('prefill.email'));
 });
 
 it('no segundo passo expõe o token da etapa anterior e o prefill repõe dados ao voltar', function (): void {

@@ -45,72 +45,6 @@ final class WorkflowFormController
         ]));
     }
 
-    /**
-     * Build the payload describing the current form step (token, step, prefill, progress, conversation).
-     *
-     * @return array<string, mixed>
-     */
-    private function buildStepPayload(
-        Request $request,
-        string $token,
-        ScriptedChatService $scriptedChat,
-    ): array {
-        $nodeRun = $this->findWaitingFormNodeRunByToken($token);
-
-        if ($nodeRun === null) {
-            abort(404);
-        }
-
-        $run = $nodeRun->workflowRun;
-        Gate::authorize('view', $run);
-
-        $main = $nodeRun->output['main'][0] ?? [];
-        $fields = is_array($main['fields'] ?? null) ? $main['fields'] : [];
-
-        $step = [
-            'title' => (string) ($main['title'] ?? ''),
-            'description' => $main['description'] ?? null,
-            'submit_label' => (string) ($main['submit_label'] ?? 'Continuar'),
-            'fields' => $fields,
-        ];
-
-        $run->refresh();
-        $workflow = $run->workflow()->with(['nodes', 'edges'])->firstOrFail();
-
-        $viewerName = ($u = $request->user()) !== null ? mb_trim((string) $u->name) : '';
-        $viewerDisplayName = $viewerName !== '' ? $viewerName : null;
-
-        $conversation = WorkflowFormConversation::query()->firstOrCreate(
-            [
-                'workflow_run_id' => $nodeRun->workflow_run_id,
-                'workflow_node_run_id' => $nodeRun->id,
-            ],
-            ['messages' => []],
-        );
-
-        $scriptedChat->ensureOpeningAssistant($conversation, $fields);
-        $conversation->refresh();
-
-        return [
-            'token' => $token,
-            'step' => $step,
-            'run_id' => $nodeRun->workflow_run_id,
-            'prefill' => WorkflowFormProgress::prefillForFields($run, $nodeRun, $fields),
-            'previous_token' => WorkflowFormProgress::previousFormResumeToken($run, $workflow, $nodeRun),
-            'progress' => [
-                'workflow_name' => $workflow->name,
-                'workflow_description' => is_string($workflow->description) && mb_trim($workflow->description) !== ''
-                    ? mb_trim($workflow->description)
-                    : null,
-                'steps' => WorkflowFormProgress::timeline($run, $workflow, $nodeRun, $viewerDisplayName),
-            ],
-            'conversation' => [
-                'id' => $conversation->id,
-                'messages' => $conversation->messages ?? [],
-            ],
-        ];
-    }
-
     public function submit(Request $request, string $token, WorkflowService $workflowService): RedirectResponse
     {
         $nodeRun = $this->findWaitingFormNodeRunByToken($token);
@@ -227,7 +161,7 @@ final class WorkflowFormController
             $nextToken = $latest?->output['main'][0]['resume_token'] ?? null;
 
             if (is_string($nextToken) && $nextToken !== $token) {
-                $nextPayload = $this->buildStepPayload($request, $nextToken, $scriptedChat);
+                $nextPayload = $this->buildStepPayload($request, $nextToken, $scriptedChat, false);
 
                 return response()->json([
                     'done' => false,
@@ -343,15 +277,16 @@ final class WorkflowFormController
 
         Gate::authorize('view', $nodeRun->workflowRun);
 
-        $main = $nodeRun->output['main'][0] ?? [];
-        $fields = is_array($main['fields'] ?? null) ? $main['fields'] : [];
-
         $validated = $request->validate([
             'field_key' => ['required', 'string'],
             'content' => ['nullable'],
+            'workflow_node_run_id' => ['nullable', 'integer'],
         ]);
 
-        $conversation = WorkflowFormConversation::query()->firstOrCreate(
+        $run = $nodeRun->workflowRun;
+        $workflow = $run->workflow()->with(['nodes', 'edges'])->firstOrFail();
+
+        $currentConversation = WorkflowFormConversation::query()->firstOrCreate(
             [
                 'workflow_run_id' => $nodeRun->workflow_run_id,
                 'workflow_node_run_id' => $nodeRun->id,
@@ -359,9 +294,25 @@ final class WorkflowFormController
             ['messages' => []],
         );
 
+        $targetConversation = $currentConversation;
+        if (isset($validated['workflow_node_run_id'])) {
+            $candidate = WorkflowFormConversation::query()
+                ->where('workflow_run_id', $run->id)
+                ->where('workflow_node_run_id', (int) $validated['workflow_node_run_id'])
+                ->first();
+            if ($candidate === null) {
+                return response()->json(['message' => 'Conversa desta etapa não encontrada.'], 422);
+            }
+            $targetConversation = $candidate;
+        }
+
+        $targetNodeRun = $targetConversation->workflowNodeRun()->firstOrFail();
+        $targetMain = $targetNodeRun->output['main'][0] ?? [];
+        $targetFields = is_array($targetMain['fields'] ?? null) ? $targetMain['fields'] : [];
+
         $result = $scriptedChat->replaceUserMessage(
-            $conversation,
-            $fields,
+            $targetConversation,
+            $targetFields,
             $validated['field_key'],
             $validated['content'] ?? null,
         );
@@ -370,10 +321,27 @@ final class WorkflowFormController
             return response()->json(['errors' => $result['errors']], 422);
         }
 
+        $currentConversation->refresh();
+
+        $currentMain = $nodeRun->output['main'][0] ?? [];
+        $currentFields = is_array($currentMain['fields'] ?? null) ? $currentMain['fields'] : [];
+        $currentMessages = is_array($currentConversation->messages) ? $currentConversation->messages : [];
+
+        $targetConversation->refresh();
+        $targetMessages = is_array($targetConversation->messages) ? $targetConversation->messages : [];
+
+        $draftValues = array_merge(
+            $scriptedChat->draftValuesFromMessages($targetFields, $targetMessages),
+            $scriptedChat->draftValuesFromMessages($currentFields, $currentMessages),
+        );
+
+        $cumulative = WorkflowFormProgress::cumulativeFormChatMessages($run, $workflow, $nodeRun, $currentConversation);
+
         return response()->json([
-            'messages' => $result['messages'],
-            'ready_for_submit' => $scriptedChat->isReadyForSubmit($result['messages']),
-            'draft_values' => $scriptedChat->draftValuesFromMessages($fields, $result['messages']),
+            'messages' => $currentMessages,
+            'cumulative_messages' => $cumulative,
+            'ready_for_submit' => $scriptedChat->isReadyForSubmit($currentMessages),
+            'draft_values' => $draftValues,
         ]);
     }
 
@@ -441,6 +409,90 @@ final class WorkflowFormController
         }
 
         return response()->json(['reply' => $reply]);
+    }
+
+    /**
+     * Build the payload describing the current form step (token, step, prefill, progress, conversation).
+     *
+     * @return array<string, mixed>
+     */
+    /**
+     * @param  bool  $cumulativeChatMessages  Se true (página Inertia), devolve o histórico de chat
+     *                                        de todas as etapas de formulário até à atual. Se false
+     *                                        (payload JSON ao avançar no chat), só o segmento da etapa atual.
+     */
+    private function buildStepPayload(
+        Request $request,
+        string $token,
+        ScriptedChatService $scriptedChat,
+        bool $cumulativeChatMessages = true,
+    ): array {
+        $nodeRun = $this->findWaitingFormNodeRunByToken($token);
+
+        if ($nodeRun === null) {
+            abort(404);
+        }
+
+        $run = $nodeRun->workflowRun;
+        Gate::authorize('view', $run);
+
+        $main = $nodeRun->output['main'][0] ?? [];
+        $fields = is_array($main['fields'] ?? null) ? $main['fields'] : [];
+
+        $step = [
+            'title' => (string) ($main['title'] ?? ''),
+            'description' => $main['description'] ?? null,
+            'submit_label' => (string) ($main['submit_label'] ?? 'Continuar'),
+            'fields' => $fields,
+        ];
+
+        $run->refresh();
+        $workflow = $run->workflow()->with(['nodes', 'edges'])->firstOrFail();
+
+        $viewerName = ($u = $request->user()) !== null ? mb_trim((string) $u->name) : '';
+        $viewerDisplayName = $viewerName !== '' ? $viewerName : null;
+
+        $conversation = WorkflowFormConversation::query()->firstOrCreate(
+            [
+                'workflow_run_id' => $nodeRun->workflow_run_id,
+                'workflow_node_run_id' => $nodeRun->id,
+            ],
+            ['messages' => []],
+        );
+
+        $scriptedChat->ensureOpeningAssistant($conversation, $fields);
+        $conversation->refresh();
+
+        $conversationMessages = is_array($conversation->messages ?? null)
+            ? $conversation->messages
+            : [];
+
+        return [
+            'token' => $token,
+            'step' => $step,
+            'run_id' => $nodeRun->workflow_run_id,
+            'prefill' => WorkflowFormProgress::prefillForFields(
+                $run,
+                $nodeRun,
+                $fields,
+                $conversationMessages,
+                $scriptedChat,
+            ),
+            'previous_token' => WorkflowFormProgress::previousFormResumeToken($run, $workflow, $nodeRun),
+            'progress' => [
+                'workflow_name' => $workflow->name,
+                'workflow_description' => is_string($workflow->description) && mb_trim($workflow->description) !== ''
+                    ? mb_trim($workflow->description)
+                    : null,
+                'steps' => WorkflowFormProgress::timeline($run, $workflow, $nodeRun, $viewerDisplayName),
+            ],
+            'conversation' => [
+                'id' => $conversation->id,
+                'messages' => $cumulativeChatMessages
+                    ? WorkflowFormProgress::cumulativeFormChatMessages($run, $workflow, $nodeRun, $conversation)
+                    : (is_array($conversation->messages) ? $conversation->messages : []),
+            ],
+        ];
     }
 
     private function findWaitingFormNodeRunByToken(string $token): ?WorkflowNodeRun

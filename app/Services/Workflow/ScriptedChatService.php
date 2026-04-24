@@ -64,10 +64,13 @@ final class ScriptedChatService
         $messages[] = [
             'role' => 'user',
             'content' => $this->userMessageContent($field, $value),
-            'meta' => [
+            'meta' => array_merge([
                 self::META_EXPECTING => $expectingKey,
                 'at' => now()->toIso8601String(),
-            ],
+                'field_type' => (string) ($field['type'] ?? 'string'),
+                'field_label' => (string) ($field['label'] ?? $field['key'] ?? $expectingKey),
+                'workflow_node_run_id' => (int) $conversation->workflow_node_run_id,
+            ], $this->fieldSchemaMeta($field)),
         ];
 
         $nextField = $this->nextFieldAfter($fields, $expectingKey);
@@ -142,7 +145,10 @@ final class ScriptedChatService
         $meta[self::META_EXPECTING] = $fieldKey;
         $meta['at'] = now()->toIso8601String();
         $meta['edited'] = true;
-        $messages[$targetIdx]['meta'] = $meta;
+        $meta['field_type'] = (string) ($field['type'] ?? 'string');
+        $meta['field_label'] = (string) ($field['label'] ?? $field['key'] ?? $fieldKey);
+        $meta['workflow_node_run_id'] = (int) $conversation->workflow_node_run_id;
+        $messages[$targetIdx]['meta'] = array_merge($meta, $this->fieldSchemaMeta($field));
 
         $conversation->messages = $messages;
         $conversation->save();
@@ -384,5 +390,64 @@ final class ScriptedChatService
         }
 
         return $content;
+    }
+
+    /**
+     * CSV de opções (select) ou lista de cartões (choice_cards) para a UI poder editar
+     * respostas no histórico cumulativo sem depender da definição da etapa atual.
+     *
+     * @param  array<string, mixed>  $field
+     * @return array<string, mixed>
+     */
+    private function fieldSchemaMeta(array $field): array
+    {
+        $type = (string) ($field['type'] ?? 'string');
+        if ($type === 'select') {
+            $opt = $field['options'] ?? '';
+
+            return [
+                'field_options' => is_string($opt) ? $opt : (is_scalar($opt) ? (string) $opt : ''),
+            ];
+        }
+        if ($type === 'choice_cards') {
+            $raw = $field['choices'] ?? [];
+
+            return [
+                'field_choices' => $this->normalizeChoicesForMeta(is_array($raw) ? $raw : []),
+            ];
+        }
+
+        return [];
+    }
+
+    /**
+     * @param  list<mixed>  $raw
+     * @return list<array<string, mixed>>
+     */
+    private function normalizeChoicesForMeta(array $raw): array
+    {
+        $out = [];
+        foreach ($raw as $c) {
+            if (! is_array($c)) {
+                continue;
+            }
+            $value = (string) ($c['value'] ?? '');
+            if ($value === '') {
+                continue;
+            }
+            $row = [
+                'value' => $value,
+                'label' => (string) ($c['label'] ?? $value),
+            ];
+            if (isset($c['description']) && is_string($c['description'])) {
+                $row['description'] = $c['description'];
+            }
+            if (isset($c['icon']) && is_string($c['icon'])) {
+                $row['icon'] = $c['icon'];
+            }
+            $out[] = $row;
+        }
+
+        return $out;
     }
 }
