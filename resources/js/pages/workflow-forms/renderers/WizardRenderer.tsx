@@ -22,6 +22,7 @@ import {
 } from '@/routes/workflow-forms';
 import { normalizeChoices, parseSelectOptions } from '../form-helpers';
 import type { FormField, ProgressPayload, Step } from '../types';
+import { WorkflowFormRendererHeader } from '../WorkflowFormRendererHeader';
 import type { StepRendererProps } from './types';
 
 const CHOICE_ICON_MAP: Record<string, LucideIcon> = {
@@ -165,10 +166,20 @@ export function WizardRenderer({
     previous_token,
     form,
     hasChoiceCards,
+    interactionMode,
+    onInteractionModeChange,
 }: StepRendererProps) {
     return (
-        <div className="scrollbar-discrete flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-y-auto p-4 lg:px-8 lg:py-6">
-            <div className="w-full max-w-none space-y-6">
+        <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col bg-background">
+            <WorkflowFormRendererHeader
+                workflowName={progress.workflow_name}
+                stepTitle={step.title}
+                run_id={run_id}
+                interactionMode={interactionMode}
+                onInteractionModeChange={onInteractionModeChange}
+            />
+            <div className="scrollbar-discrete min-h-0 flex-1 overflow-y-auto">
+                <div className="mx-auto w-full max-w-2xl space-y-6 px-4 py-6 lg:px-6">
                 <FormStepsSegmentBar progress={progress} step={step} />
                 <div>
                     <h1 className="text-2xl font-semibold tracking-tight">
@@ -179,9 +190,6 @@ export function WizardRenderer({
                             {String(step.description)}
                         </p>
                     ) : null}
-                    <p className="mt-1 text-xs text-muted-foreground">
-                        Execução #{run_id}
-                    </p>
                 </div>
 
                 <form
@@ -343,6 +351,7 @@ export function WizardRenderer({
                         </Button>
                     </div>
                 </form>
+                </div>
             </div>
         </div>
     );

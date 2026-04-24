@@ -1,5 +1,5 @@
 import { useForm } from '@inertiajs/react';
-import { CheckCircle2, ChevronDown, ChevronUp, Pencil, SendHorizonal, Sparkles, Workflow, X } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronUp, Pencil, SendHorizonal, Sparkles, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -18,7 +18,9 @@ import { edit as editChatRoute } from '@/routes/workflow-forms/chat';
 import type { User } from '@/types/auth';
 import type { ChatAdvancePayload } from '../Show';
 import { mergeInitialData, normalizeChoices, parseSelectOptions } from '../form-helpers';
-import type { ChatMessage, FormField, Step } from '../types';
+import type { ChatDraftUpdatePayload, ChatMessage, FormField, Step } from '../types';
+import { WorkflowFormRendererHeader } from '../WorkflowFormRendererHeader';
+import type { WorkflowInteractionMode } from './types';
 
 const ASSISTANT_AVATAR_SRC = '/images/smartsau-mascot.png';
 const ASSISTANT_NAME = 'SmartSaú';
@@ -35,6 +37,12 @@ type Props = {
     workflowName?: string | null;
     onAdvance: (next: ChatAdvancePayload) => void;
     onComplete: (redirectUrl: string) => void;
+    /** Mantém mensagens e rascunho alinhados com o pai ao alternar Formulário/Chat. */
+    onDraftUpdate?: (payload: ChatDraftUpdatePayload) => void;
+    /** Incrementado no pai em cada submit-chat bem-sucedido; distingue avanço no chat de mudança de URL (Inertia). */
+    chatAdvanceSeq: number;
+    interactionMode: WorkflowInteractionMode;
+    onInteractionModeChange: (mode: WorkflowInteractionMode) => void;
 };
 
 /**
@@ -62,33 +70,26 @@ type TransitionMessage = {
 
 type DisplayMessage = ChatMessage | TransitionMessage;
 
-function lastExpectingField(messages: ChatMessage[]): string | null {
+function lastAssistantMessage(messages: ChatMessage[]): ChatMessage | null {
     for (let i = messages.length - 1; i >= 0; i--) {
         const m = messages[i];
-        if (m?.role !== 'assistant') {
-            continue;
-        }
-        const ex = m.meta?.expecting_field;
-        if (typeof ex === 'string' && ex !== '') {
-            return ex;
+        if (m?.role === 'assistant') {
+            return m;
         }
     }
 
     return null;
 }
 
-function isReadyForSubmit(messages: ChatMessage[]): boolean {
-    for (let i = messages.length - 1; i >= 0; i--) {
-        const m = messages[i];
-        if (m?.role !== 'assistant') {
-            continue;
-        }
-        if (m.meta?.phase === 'ready_for_submit') {
-            return true;
-        }
-    }
+function lastExpectingField(messages: ChatMessage[]): string | null {
+    const last = lastAssistantMessage(messages);
+    const ex = last?.meta?.expecting_field;
+    return typeof ex === 'string' && ex !== '' ? ex : null;
+}
 
-    return false;
+function isReadyForSubmit(messages: ChatMessage[]): boolean {
+    const last = lastAssistantMessage(messages);
+    return last?.meta?.phase === 'ready_for_submit';
 }
 
 function findLastActiveAssistantIndex(messages: DisplayMessage[]): number {
@@ -119,6 +120,97 @@ function formatBubbleTime(meta: Record<string, unknown> | undefined): string | n
     }
 }
 
+function metaWorkflowNodeRunId(meta: Record<string, unknown> | undefined): number | undefined {
+    if (!meta) {
+        return undefined;
+    }
+    const v = meta.workflow_node_run_id;
+    if (typeof v === 'number' && Number.isFinite(v)) {
+        return v;
+    }
+    if (typeof v === 'string' && /^\d+$/.test(v)) {
+        return parseInt(v, 10);
+    }
+
+    return undefined;
+}
+
+/** Campo da etapa atual ou metadados gravados na mensagem (etapas anteriores no histórico cumulativo). */
+function formFieldForUserMessage(
+    userFieldKey: string,
+    meta: Record<string, unknown> | undefined,
+    stepFields: FormField[],
+): FormField | null {
+    const fromStep = stepFields.find((f) => f.key === userFieldKey);
+    if (fromStep) {
+        return fromStep;
+    }
+    const t = meta?.field_type;
+    const label = meta?.field_label;
+    if (typeof t !== 'string' || t === '') {
+        return null;
+    }
+    const base: FormField = {
+        key: userFieldKey,
+        type: t,
+        label: typeof label === 'string' && label !== '' ? label : userFieldKey,
+    };
+    const opt = meta?.field_options;
+    if (typeof opt === 'string') {
+        base.options = opt;
+    }
+    const ch = meta?.field_choices;
+    if (Array.isArray(ch)) {
+        base.choices = normalizeChoices(ch);
+    }
+
+    return base;
+}
+
+/** Select/cartões só são editáveis se houver opções (vindas da etapa ou de `field_*` na meta). */
+function userMessageFieldHasEditableSchema(field: FormField): boolean {
+    if (field.type === 'select') {
+        return parseSelectOptions(field.options).length > 0;
+    }
+    if (field.type === 'choice_cards') {
+        return normalizeChoices(field.choices).length > 0;
+    }
+
+    return true;
+}
+
+type ChatEditContext = {
+    historyIndex: number;
+    field: FormField;
+    fieldKey: string;
+    nodeRunId?: number;
+};
+
+function findLastTransitionIndex(messages: DisplayMessage[]): number {
+    for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i]?.role === 'system') {
+            return i;
+        }
+    }
+
+    return -1;
+}
+
+/** Mensagens só da etapa em curso (último bloco após o separador `system`), para API e `ready`. */
+function sliceCurrentStepChatMessages(full: DisplayMessage[]): ChatMessage[] {
+    const lastSys = findLastTransitionIndex(full);
+    const start = lastSys >= 0 ? lastSys + 1 : 0;
+    const out: ChatMessage[] = [];
+    for (let i = start; i < full.length; i++) {
+        const m = full[i];
+        if (m.role === 'user' || m.role === 'assistant') {
+            out.push(m);
+        }
+    }
+
+    return out;
+}
+
 export function ChatbotRenderer({
     token,
     step,
@@ -130,6 +222,10 @@ export function ChatbotRenderer({
     workflowName,
     onAdvance,
     onComplete,
+    onDraftUpdate,
+    chatAdvanceSeq,
+    interactionMode,
+    onInteractionModeChange,
 }: Props) {
     const getInitials = useInitials();
     const userAvatarSrc = useMemo(() => buildFakeUserAvatar(user), [user]);
@@ -137,8 +233,12 @@ export function ChatbotRenderer({
     // Cumulative conversation across steps. Each step's messages are appended
     // as the workflow advances, with a transition marker in between.
     const [history, setHistory] = useState<DisplayMessage[]>(() => initialMessages);
-    const [currentMessages, setCurrentMessages] = useState<ChatMessage[]>(initialMessages);
-    const [ready, setReady] = useState(() => isReadyForSubmit(initialMessages));
+    const [currentMessages, setCurrentMessages] = useState<ChatMessage[]>(() =>
+        sliceCurrentStepChatMessages(initialMessages),
+    );
+    const [ready, setReady] = useState(() =>
+        isReadyForSubmit(sliceCurrentStepChatMessages(initialMessages)),
+    );
     const [input, setInput] = useState('');
     const [chatError, setChatError] = useState<string | null>(null);
     const [sending, setSending] = useState(false);
@@ -146,8 +246,8 @@ export function ChatbotRenderer({
     const [extractOpen, setExtractOpen] = useState(false);
     const [extractText, setExtractText] = useState('');
     const [extractBusy, setExtractBusy] = useState(false);
-    // Estado da edição inline de respostas já dadas na etapa atual.
-    const [editingKey, setEditingKey] = useState<string | null>(null);
+    // Estado da edição inline de respostas do utilizador (qualquer etapa no histórico cumulativo).
+    const [editContext, setEditContext] = useState<ChatEditContext | null>(null);
     const [editInput, setEditInput] = useState('');
     const [editSaving, setEditSaving] = useState(false);
 
@@ -159,31 +259,23 @@ export function ChatbotRenderer({
     const prevTokenRef = useRef<string>(token);
     const submitInFlight = useRef(false);
     const autoSubmitLatchRef = useRef(false);
+    const initialMessagesRef = useRef(initialMessages);
+    initialMessagesRef.current = initialMessages;
 
-    // When the active step changes (internal advance), replace the "current"
-    // messages with the new step's conversation but KEEP the prior history.
+    const appliedChatAdvanceSeqRef = useRef<number>(-1);
+
+    // Hidratar histórico: (1) avanço pelo chat (chatAdvanceSeq sobe) + novo token → anexa
+    // segmento; (2) mudança de token sem novo seq (Inertia / «Voltar») → substitui pelo servidor.
     useEffect(() => {
-        if (prevTokenRef.current === token) {
-            // First mount, or same step: keep history aligned with initialMessages
-            setCurrentMessages(initialMessages);
-            setHistory((prev) => {
-                // If history is empty or starts fresh, use initialMessages as base.
-                if (prev.length === 0) {
-                    return initialMessages;
-                }
+        const segmentOrCumulative = initialMessagesRef.current;
+        const tokenChanged = prevTokenRef.current !== token;
+        const shouldAppendFromChatSubmit =
+            chatAdvanceSeq > appliedChatAdvanceSeqRef.current && tokenChanged;
 
-                // Replace trailing "current" block with updated initialMessages so that
-                // chat replies within the same step stay in sync.
-                const lastTransitionIdx = findLastTransitionIndex(prev);
-                const kept = lastTransitionIdx >= 0 ? prev.slice(0, lastTransitionIdx + 1) : [];
-
-                return [...kept, ...initialMessages];
-            });
-        } else {
-            // Moved to a new token (new step). Keep previous messages, add a
-            // visual separator and append the new step's initial messages.
+        if (shouldAppendFromChatSubmit) {
+            appliedChatAdvanceSeqRef.current = chatAdvanceSeq;
             prevTokenRef.current = token;
-            setCurrentMessages(initialMessages);
+            setCurrentMessages(segmentOrCumulative);
             setHistory((prev) => [
                 ...prev,
                 {
@@ -191,16 +283,25 @@ export function ChatbotRenderer({
                     content: step.title,
                     meta: { at: new Date().toISOString() },
                 } satisfies TransitionMessage,
-                ...initialMessages,
+                ...segmentOrCumulative,
             ]);
+            setReady(isReadyForSubmit(segmentOrCumulative));
+        } else if (tokenChanged || appliedChatAdvanceSeqRef.current < 0) {
+            appliedChatAdvanceSeqRef.current = chatAdvanceSeq;
+            prevTokenRef.current = token;
+            const full = segmentOrCumulative as DisplayMessage[];
+            setHistory(full);
+            const currentSeg = sliceCurrentStepChatMessages(full);
+            setCurrentMessages(currentSeg);
+            setReady(isReadyForSubmit(currentSeg));
         }
 
-        setReady(isReadyForSubmit(initialMessages));
         setInput('');
-        setEditingKey(null);
+        setEditContext(null);
         setEditInput('');
         form.setData(mergeInitialData(step.fields, prefill));
-    }, [token]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- `initialMessages` via ref; evitar re-hidratar a cada render
+    }, [token, chatAdvanceSeq]);
 
     // Mantém o foco sempre na última mensagem. Usamos ResizeObserver no
     // conteúdo para acompanhar qualquer crescimento (mensagens novas, widget
@@ -285,8 +386,9 @@ export function ChatbotRenderer({
             for (const [k, v] of Object.entries(draft)) {
                 form.setData(k, v as never);
             }
+            onDraftUpdate?.({ messages: res.data.messages, draftValues: draft });
         },
-        [form, replaceCurrentBlock, token],
+        [form, onDraftUpdate, replaceCurrentBlock, token],
     );
 
     const onSend = useCallback(async () => {
@@ -369,15 +471,16 @@ export function ChatbotRenderer({
             }
 
             if (res.data.done) {
+                const completed = res.data;
                 setHistory((prev) => [
                     ...prev,
                     {
                         role: 'system',
-                        content: res.data.message ?? 'Fluxo concluído.',
+                        content: completed.message ?? 'Fluxo concluído.',
                         meta: { at: new Date().toISOString() },
                     } satisfies TransitionMessage,
                 ]);
-                onComplete(res.data.redirect_url);
+                onComplete(completed.redirect_url);
 
                 return;
             }
@@ -398,7 +501,7 @@ export function ChatbotRenderer({
 
             return;
         }
-        if (sending || chatError || editingKey) {
+        if (sending || chatError || editContext) {
             return;
         }
         if (autoSubmitLatchRef.current) {
@@ -406,21 +509,13 @@ export function ChatbotRenderer({
         }
         autoSubmitLatchRef.current = true;
         void submitStep();
-    }, [chatError, editingKey, ready, sending, submitStep, token]);
-
-    // Índice inicial do bloco da etapa atual dentro de `history`, para identificar
-    // as mensagens editáveis (apenas as da etapa em curso).
-    const currentBlockStartIdx = useMemo(() => {
-        const lastTransitionIdx = findLastTransitionIndex(history);
-
-        return lastTransitionIdx >= 0 ? lastTransitionIdx + 1 : 0;
-    }, [history]);
+    }, [chatError, editContext, ready, sending, submitStep, token]);
 
     const startEdit = useCallback(
-        (fieldKey: string, currentContent: string) => {
+        (historyIndex: number, field: FormField, fieldKey: string, currentContent: string, nodeRunId?: number) => {
             setChatError(null);
             autoSubmitLatchRef.current = false;
-            setEditingKey(fieldKey);
+            setEditContext({ historyIndex, field, fieldKey, nodeRunId });
             setEditInput(currentContent);
             // Foco diferido para garantir que o input já foi montado.
             setTimeout(() => editInputRef.current?.focus(), 0);
@@ -429,32 +524,36 @@ export function ChatbotRenderer({
     );
 
     const cancelEdit = useCallback(() => {
-        setEditingKey(null);
+        setEditContext(null);
         setEditInput('');
     }, []);
 
     const saveEdit = useCallback(async () => {
-        if (!editingKey || editSaving) {
+        if (!editContext || editSaving) {
             return;
         }
-        const field = step.fields.find((f) => f.key === editingKey) ?? null;
-        // Para campos booleanos não passamos por este editor de texto.
-        if (field?.type === 'boolean') {
+        const { field, fieldKey } = editContext;
+        if (field.type === 'boolean') {
             return;
         }
-        if (editInput.trim() === '' && field?.type !== 'textarea') {
+        if (editInput.trim() === '' && field.type !== 'textarea') {
             return;
         }
         setEditSaving(true);
         setChatError(null);
+        const body: Record<string, unknown> = {
+            field_key: fieldKey,
+            content: editInput,
+        };
+        if (editContext.nodeRunId !== undefined) {
+            body.workflow_node_run_id = editContext.nodeRunId;
+        }
         const res = await postJson<{
             messages: ChatMessage[];
+            cumulative_messages?: ChatMessage[];
             ready_for_submit: boolean;
             draft_values: Record<string, unknown>;
-        }>(editChatRoute.url(token), {
-            field_key: editingKey,
-            content: editInput,
-        });
+        }>(editChatRoute.url(token), body);
         setEditSaving(false);
         if (!res.ok) {
             const err = res.data as { errors?: Record<string, string[]>; message?: string };
@@ -467,43 +566,46 @@ export function ChatbotRenderer({
 
             return;
         }
-        replaceCurrentBlock(res.data.messages);
-        setReady(res.data.ready_for_submit);
-        const draft = res.data.draft_values ?? {};
-        for (const [k, v] of Object.entries(draft)) {
-            form.setData(k, v as never);
+        const cum = res.data.cumulative_messages;
+        if (cum !== undefined && cum.length > 0) {
+            const full = cum as DisplayMessage[];
+            setHistory(full);
+            const seg = sliceCurrentStepChatMessages(full);
+            setCurrentMessages(seg);
+            setReady(res.data.ready_for_submit);
+            const draft = res.data.draft_values ?? {};
+            for (const f of step.fields) {
+                if (Object.prototype.hasOwnProperty.call(draft, f.key)) {
+                    form.setData(f.key, draft[f.key] as never);
+                }
+            }
+            onDraftUpdate?.({ messages: seg, draftValues: draft });
+        } else {
+            replaceCurrentBlock(res.data.messages);
+            setReady(res.data.ready_for_submit);
+            const draft = res.data.draft_values ?? {};
+            for (const [k, v] of Object.entries(draft)) {
+                form.setData(k, v as never);
+            }
+            onDraftUpdate?.({ messages: res.data.messages, draftValues: draft });
         }
-        setEditingKey(null);
+        setEditContext(null);
         setEditInput('');
-    }, [editInput, editSaving, editingKey, form, replaceCurrentBlock, step.fields, token]);
+    }, [editContext, editInput, editSaving, form, onDraftUpdate, replaceCurrentBlock, step.fields, token]);
 
     return (
         <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
-            <header className="shrink-0 border-b border-border/80 bg-background/90 px-4 py-3 backdrop-blur-sm supports-[backdrop-filter]:bg-background/75 lg:px-6">
-                <div className="mx-auto flex max-w-2xl items-center gap-3">
-                    <span
-                        className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary shadow-sm"
-                        aria-hidden
-                    >
-                        <Workflow className="size-5" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                        <h1 className="truncate text-sm font-semibold text-foreground">
-                            {workflowName ?? step.title}
-                        </h1>
-                        <p className="truncate text-xs text-muted-foreground">
-                            {workflowName ? `Etapa: ${step.title}` : 'Processo em curso'}
-                        </p>
-                    </div>
-                    <span className="shrink-0 rounded-full border border-border bg-muted/40 px-2.5 py-1 font-mono text-[10px] leading-none text-muted-foreground tabular-nums">
-                        #{run_id}
-                    </span>
-                </div>
-            </header>
+            <WorkflowFormRendererHeader
+                workflowName={workflowName}
+                stepTitle={step.title}
+                run_id={run_id}
+                interactionMode={interactionMode}
+                onInteractionModeChange={onInteractionModeChange}
+            />
 
             <div
                 ref={scrollRef}
-                className="scrollbar-discrete min-h-0 flex-1 overflow-y-auto bg-gradient-to-b from-muted/25 via-background to-muted/20"
+                className="scrollbar-discrete min-h-0 flex-1 overflow-y-auto bg-gradient-to-b from-muted/25 via-background to-muted/20 dark:bg-none dark:bg-background"
             >
                 <div
                     ref={scrollContentRef}
@@ -544,27 +646,35 @@ export function ChatbotRenderer({
                         const isActive = !ready && isAssistant && idx === activeIdx && expectingField !== null;
                         const t = formatBubbleTime(m.meta);
 
-                        // Mensagens do utilizador dentro da etapa atual podem ser editadas
-                        // enquanto o processo não avançou (não está a enviar/avançar) e a
-                        // mensagem tem associação a um campo (meta.expecting_field).
+                        // Respostas do utilizador com meta.expecting_field podem ser editadas
+                        // (incluindo select/cartões se a meta trouxer field_options / field_choices).
                         const userFieldKey =
                             !isAssistant && typeof m.meta?.expecting_field === 'string'
                                 ? (m.meta.expecting_field as string)
                                 : null;
-                        const userField = userFieldKey
-                            ? step.fields.find((f) => f.key === userFieldKey) ?? null
-                            : null;
-                        const isInCurrentStep = idx >= currentBlockStartIdx;
+                        const fieldFromCurrentStep =
+                            userFieldKey !== null ? step.fields.find((f) => f.key === userFieldKey) ?? null : null;
+                        const userField =
+                            fieldFromCurrentStep ??
+                            (userFieldKey !== null
+                                ? formFieldForUserMessage(
+                                      userFieldKey,
+                                      m.meta as Record<string, unknown> | undefined,
+                                      step.fields,
+                                  )
+                                : null);
+                        const msgNodeRunId = metaWorkflowNodeRunId(m.meta as Record<string, unknown> | undefined);
                         const canEditUserMsg =
                             !isAssistant
                             && userFieldKey !== null
                             && userField !== null
                             && userField.type !== 'boolean'
-                            && isInCurrentStep
+                            && userMessageFieldHasEditableSchema(userField)
                             && !advancing
                             && !sending
-                            && editingKey !== userFieldKey;
-                        const isEditingThis = !isAssistant && userFieldKey !== null && editingKey === userFieldKey;
+                            && (editContext === null || editContext.historyIndex === idx);
+                        const isEditingThis =
+                            !isAssistant && editContext !== null && editContext.historyIndex === idx;
 
                         return (
                             <div
@@ -646,9 +756,9 @@ export function ChatbotRenderer({
                                                   ),
                                         )}
                                     >
-                                        {isEditingThis && userField ? (
+                                        {isEditingThis && editContext ? (
                                             <EditableAnswer
-                                                field={userField}
+                                                field={editContext.field}
                                                 value={editInput}
                                                 onChange={setEditInput}
                                                 onSave={() => void saveEdit()}
@@ -674,10 +784,12 @@ export function ChatbotRenderer({
                                             />
                                         ) : null}
 
-                                        {canEditUserMsg && userFieldKey ? (
+                                        {canEditUserMsg && userField && userFieldKey ? (
                                             <button
                                                 type="button"
-                                                onClick={() => startEdit(userFieldKey, m.content)}
+                                                onClick={() =>
+                                                    startEdit(idx, userField, userFieldKey, m.content, msgNodeRunId)
+                                                }
                                                 className={cn(
                                                     'absolute -left-2 top-1/2 -translate-x-full -translate-y-1/2',
                                                     'inline-flex items-center gap-1 rounded-full border border-border/60 bg-background px-2 py-1 text-[10px] font-medium text-muted-foreground shadow-sm',
@@ -791,16 +903,6 @@ export function ChatbotRenderer({
             ) : null}
         </div>
     );
-}
-
-function findLastTransitionIndex(messages: DisplayMessage[]): number {
-    for (let i = messages.length - 1; i >= 0; i--) {
-        if (messages[i]?.role === 'system') {
-            return i;
-        }
-    }
-
-    return -1;
 }
 
 type InlineWidgetProps = {

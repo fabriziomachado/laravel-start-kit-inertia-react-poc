@@ -1,65 +1,115 @@
 import { LayoutList, MessagesSquare } from 'lucide-react';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { useCallback, useState } from 'react';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { patchJson } from '@/lib/workflow-form-api';
 import { cn } from '@/lib/utils';
 import { preferences as preferencesRoute } from '@/routes/workflow-forms';
 
 type Renderer = 'wizard' | 'chatbot';
 
-export function RendererToggle({
+const WIZARD_HINT =
+    'Formulário — todos os campos visíveis em passos, ideal para revisão rápida.';
+const CHAT_HINT =
+    'Chat — conversa guiada, uma pergunta de cada vez com o assistente.';
+
+export function RendererModeToggle({
     value,
     onChange,
     disabled,
+    className,
 }: {
     value: Renderer;
     onChange: (v: Renderer) => void;
     disabled?: boolean;
+    className?: string;
 }) {
-    return (
-        <ToggleGroup
-            type="single"
-            value={value}
-            disabled={disabled}
-            onValueChange={(v) => {
-                if (v !== 'wizard' && v !== 'chatbot') {
-                    return;
-                }
-                void (async () => {
-                    const res = await patchJson<{ preferences: { workflow_form_renderer: Renderer } }>(
-                        preferencesRoute.url(),
-                        { workflow_form_renderer: v },
-                    );
-                    if (res.ok) {
-                        onChange(res.data.preferences.workflow_form_renderer);
-                    }
-                })();
-            }}
-            variant="outline"
-            size="sm"
-            className="w-full max-w-xs justify-stretch shadow-none"
-            aria-label="Modo de preenchimento do formulário"
-        >
-            <ToggleGroupItem value="wizard" className="flex-1 gap-1.5 text-xs">
-                <LayoutList className="size-3.5 shrink-0" aria-hidden />
-                Formulário
-            </ToggleGroupItem>
-            <ToggleGroupItem value="chatbot" className="flex-1 gap-1.5 text-xs">
-                <MessagesSquare className="size-3.5 shrink-0" aria-hidden />
-                Chat
-            </ToggleGroupItem>
-        </ToggleGroup>
-    );
-}
+    const [pending, setPending] = useState(false);
 
-export function RendererToggleLabel({ className }: { className?: string }) {
+    const select = useCallback(
+        async (next: Renderer) => {
+            if (disabled || pending || next === value) {
+                return;
+            }
+            setPending(true);
+            try {
+                const res = await patchJson<{
+                    preferences: { workflow_form_renderer: Renderer };
+                }>(preferencesRoute.url(), { workflow_form_renderer: next });
+                if (res.ok) {
+                    onChange(res.data.preferences.workflow_form_renderer);
+                }
+            } finally {
+                setPending(false);
+            }
+        },
+        [disabled, onChange, pending, value],
+    );
+
+    const busy = Boolean(disabled || pending);
+
     return (
-        <p
+        <div
+            role="radiogroup"
+            aria-label="Modo de preenchimento"
             className={cn(
-                'text-[11px] font-medium tracking-wide text-muted-foreground uppercase',
+                'inline-flex h-9 shrink-0 items-center rounded-lg border border-border/80 bg-muted/40 p-0.5 shadow-none',
                 className,
             )}
         >
-            Modo
-        </p>
+            <Tooltip>
+                <TooltipTrigger asChild>
+                    <button
+                        type="button"
+                        role="radio"
+                        aria-checked={value === 'wizard'}
+                        disabled={busy}
+                        onClick={() => void select('wizard')}
+                        className={cn(
+                            'inline-flex size-8 items-center justify-center rounded-md transition-[color,box-shadow,background]',
+                            'outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                            'disabled:pointer-events-none disabled:opacity-50',
+                            value === 'wizard'
+                                ? 'bg-background text-foreground shadow-sm'
+                                : 'text-muted-foreground hover:bg-background/60 hover:text-foreground',
+                        )}
+                    >
+                        <LayoutList className="size-4" aria-hidden />
+                        <span className="sr-only">Modo formulário</span>
+                    </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-[14rem] text-left">
+                    {WIZARD_HINT}
+                </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+                <TooltipTrigger asChild>
+                    <button
+                        type="button"
+                        role="radio"
+                        aria-checked={value === 'chatbot'}
+                        disabled={busy}
+                        onClick={() => void select('chatbot')}
+                        className={cn(
+                            'inline-flex size-8 items-center justify-center rounded-md transition-[color,box-shadow,background]',
+                            'outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                            'disabled:pointer-events-none disabled:opacity-50',
+                            value === 'chatbot'
+                                ? 'bg-background text-foreground shadow-sm'
+                                : 'text-muted-foreground hover:bg-background/60 hover:text-foreground',
+                        )}
+                    >
+                        <MessagesSquare className="size-4" aria-hidden />
+                        <span className="sr-only">Modo chat</span>
+                    </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-[14rem] text-left">
+                    {CHAT_HINT}
+                </TooltipContent>
+            </Tooltip>
+        </div>
     );
 }
