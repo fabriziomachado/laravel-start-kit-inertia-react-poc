@@ -1,6 +1,7 @@
 import { useForm } from '@inertiajs/react';
 import { CheckCircle2, ChevronDown, ChevronUp, Pencil, SendHorizonal, Sparkles, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,6 +25,31 @@ import type { WorkflowInteractionMode } from './types';
 
 const ASSISTANT_AVATAR_SRC = '/images/smartsau-mascot.png';
 const ASSISTANT_NAME = 'SmartSaú';
+
+const CHAT_ERROR_TOAST_ID = 'workflow-form-chat-error';
+
+/** Mensagens de validação Laravel frequentemente em inglês → texto para o utilizador. */
+function humanizeChatError(message: string): string {
+    const t = message.trim();
+    const exact: Record<string, string> = {
+        'The accept terms field must be accepted.': 'Tem de aceitar os termos para continuar.',
+        'The accept terms field must be accepted': 'Tem de aceitar os termos para continuar.',
+    };
+    if (exact[t]) {
+        return exact[t];
+    }
+    if (/^The .+ field must be accepted\.?$/i.test(t)) {
+        return 'Tem de aceitar os termos ou confirmações indicadas para continuar.';
+    }
+    if (/^The .+ field is required\.?$/i.test(t)) {
+        return 'Preencha os campos obrigatórios.';
+    }
+    if (/^The .+ must be accepted\.?$/i.test(t)) {
+        return 'Confirme as opções obrigatórias antes de continuar.';
+    }
+
+    return t;
+}
 
 type Props = {
     token: string;
@@ -241,6 +267,9 @@ export function ChatbotRenderer({
     );
     const [input, setInput] = useState('');
     const [chatError, setChatError] = useState<string | null>(null);
+    /** Índice em `history` do balão a realçar após erro de validação (assist. ou utilizador). */
+    const [errorBubbleHistoryIdx, setErrorBubbleHistoryIdx] = useState<number | null>(null);
+    const errorBubbleClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [sending, setSending] = useState(false);
     const [advancing, setAdvancing] = useState(false);
     const [extractOpen, setExtractOpen] = useState(false);
@@ -294,6 +323,14 @@ export function ChatbotRenderer({
             const currentSeg = sliceCurrentStepChatMessages(full);
             setCurrentMessages(currentSeg);
             setReady(isReadyForSubmit(currentSeg));
+        }
+
+        toast.dismiss(CHAT_ERROR_TOAST_ID);
+        setChatError(null);
+        setErrorBubbleHistoryIdx(null);
+        if (errorBubbleClearTimerRef.current !== null) {
+            clearTimeout(errorBubbleClearTimerRef.current);
+            errorBubbleClearTimerRef.current = null;
         }
 
         setInput('');
@@ -350,6 +387,71 @@ export function ChatbotRenderer({
     );
     const activeIdx = useMemo(() => findLastActiveAssistantIndex(history), [history]);
 
+    const clearChatError = useCallback(() => {
+        setChatError(null);
+        setErrorBubbleHistoryIdx(null);
+        if (errorBubbleClearTimerRef.current !== null) {
+            clearTimeout(errorBubbleClearTimerRef.current);
+            errorBubbleClearTimerRef.current = null;
+        }
+        toast.dismiss(CHAT_ERROR_TOAST_ID);
+    }, []);
+
+    const raiseChatError = useCallback(
+        (
+            message: string,
+            opts?: { highlightAssistantBubble?: boolean; highlightHistoryIndex?: number | null },
+        ) => {
+            setChatError(message);
+            const human = humanizeChatError(message);
+            toast.error(human, {
+                id: CHAT_ERROR_TOAST_ID,
+                duration: 9000,
+                ...(ready
+                    ? {
+                          action: {
+                              label: 'Tentar novamente',
+                              onClick: () => {
+                                  autoSubmitLatchRef.current = false;
+                                  clearChatError();
+                              },
+                          },
+                      }
+                    : {}),
+            });
+            if (errorBubbleClearTimerRef.current !== null) {
+                clearTimeout(errorBubbleClearTimerRef.current);
+                errorBubbleClearTimerRef.current = null;
+            }
+            let idx: number | null = null;
+            if (opts?.highlightHistoryIndex !== undefined && opts?.highlightHistoryIndex !== null) {
+                idx = opts.highlightHistoryIndex;
+            } else if (opts?.highlightAssistantBubble === false) {
+                idx = null;
+            } else {
+                const last = findLastActiveAssistantIndex(history);
+                idx = last >= 0 ? last : null;
+            }
+            setErrorBubbleHistoryIdx(idx);
+            if (idx !== null) {
+                errorBubbleClearTimerRef.current = setTimeout(() => {
+                    setErrorBubbleHistoryIdx(null);
+                    errorBubbleClearTimerRef.current = null;
+                }, 8200);
+            }
+        },
+        [clearChatError, history, ready],
+    );
+
+    useEffect(
+        () => () => {
+            if (errorBubbleClearTimerRef.current !== null) {
+                clearTimeout(errorBubbleClearTimerRef.current);
+            }
+        },
+        [],
+    );
+
     const replaceCurrentBlock = useCallback((nextBlock: ChatMessage[]) => {
         setCurrentMessages(nextBlock);
         setHistory((prev) => {
@@ -362,7 +464,7 @@ export function ChatbotRenderer({
 
     const sendContent = useCallback(
         async (content: unknown) => {
-            setChatError(null);
+            clearChatError();
             setSending(true);
             const res = await postJson<{
                 messages: ChatMessage[];
@@ -376,7 +478,7 @@ export function ChatbotRenderer({
                     err.errors?.chat?.[0] ??
                     Object.values(err.errors ?? {})[0]?.[0] ??
                     'Não foi possível enviar a mensagem.';
-                setChatError(first);
+                raiseChatError(first);
 
                 return;
             }
@@ -388,7 +490,7 @@ export function ChatbotRenderer({
             }
             onDraftUpdate?.({ messages: res.data.messages, draftValues: draft });
         },
-        [form, onDraftUpdate, replaceCurrentBlock, token],
+        [clearChatError, form, onDraftUpdate, raiseChatError, replaceCurrentBlock, token],
     );
 
     const onSend = useCallback(async () => {
@@ -418,14 +520,16 @@ export function ChatbotRenderer({
             return;
         }
         setExtractBusy(true);
-        setChatError(null);
+        clearChatError();
         const res = await postJson<{ values: Record<string, unknown> }>(aiExtractRoute.url(token), {
             free_text: extractText,
         });
         setExtractBusy(false);
         if (!res.ok) {
             const body = res.data as { message?: string };
-            setChatError(body.message ?? 'Extração falhou.');
+            raiseChatError(body.message ?? 'Extração falhou.', {
+                highlightAssistantBubble: false,
+            });
 
             return;
         }
@@ -434,7 +538,7 @@ export function ChatbotRenderer({
         }
         setExtractOpen(false);
         setExtractText('');
-    }, [extractText, form, token]);
+    }, [clearChatError, extractText, form, raiseChatError, token]);
 
     const submitStep = useCallback(async () => {
         if (submitInFlight.current) {
@@ -442,7 +546,7 @@ export function ChatbotRenderer({
         }
         submitInFlight.current = true;
         setAdvancing(true);
-        setChatError(null);
+        clearChatError();
         try {
             const res = await postJson<
                 | {
@@ -464,7 +568,7 @@ export function ChatbotRenderer({
                     Object.values(err.errors ?? {})[0]?.[0] ??
                     err.message ??
                     'Não foi possível submeter esta etapa.';
-                setChatError(first);
+                raiseChatError(first);
                 autoSubmitLatchRef.current = false;
 
                 return;
@@ -490,7 +594,7 @@ export function ChatbotRenderer({
             setAdvancing(false);
             submitInFlight.current = false;
         }
-    }, [form, onAdvance, onComplete, token]);
+    }, [clearChatError, form, onAdvance, onComplete, raiseChatError, token]);
 
     // Quando a etapa fica completa na conversa, submete sem pedir confirmação ao utilizador.
     // Se o utilizador estiver a editar uma resposta, suspendemos a auto-submissão até
@@ -513,14 +617,14 @@ export function ChatbotRenderer({
 
     const startEdit = useCallback(
         (historyIndex: number, field: FormField, fieldKey: string, currentContent: string, nodeRunId?: number) => {
-            setChatError(null);
+            clearChatError();
             autoSubmitLatchRef.current = false;
             setEditContext({ historyIndex, field, fieldKey, nodeRunId });
             setEditInput(currentContent);
             // Foco diferido para garantir que o input já foi montado.
             setTimeout(() => editInputRef.current?.focus(), 0);
         },
-        [],
+        [clearChatError],
     );
 
     const cancelEdit = useCallback(() => {
@@ -540,7 +644,7 @@ export function ChatbotRenderer({
             return;
         }
         setEditSaving(true);
-        setChatError(null);
+        clearChatError();
         const body: Record<string, unknown> = {
             field_key: fieldKey,
             content: editInput,
@@ -562,7 +666,7 @@ export function ChatbotRenderer({
                 Object.values(err.errors ?? {})[0]?.[0] ??
                 err.message ??
                 'Não foi possível atualizar a resposta.';
-            setChatError(first);
+            raiseChatError(first, { highlightHistoryIndex: editContext.historyIndex });
 
             return;
         }
@@ -591,7 +695,18 @@ export function ChatbotRenderer({
         }
         setEditContext(null);
         setEditInput('');
-    }, [editContext, editInput, editSaving, form, onDraftUpdate, replaceCurrentBlock, step.fields, token]);
+    }, [
+        clearChatError,
+        editContext,
+        editInput,
+        editSaving,
+        form,
+        onDraftUpdate,
+        raiseChatError,
+        replaceCurrentBlock,
+        step.fields,
+        token,
+    ]);
 
     return (
         <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
@@ -744,7 +859,7 @@ export function ChatbotRenderer({
                                 >
                                     <div
                                         className={cn(
-                                            'relative rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed',
+                                            'relative rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed transition-[box-shadow,border-color] duration-300',
                                             isAssistant
                                                 ? cn(
                                                       'border border-border/60 bg-card text-card-foreground',
@@ -754,6 +869,10 @@ export function ChatbotRenderer({
                                                       'bg-primary text-primary-foreground',
                                                       isNewGroup ? 'rounded-tr-2xl' : 'rounded-tr-lg',
                                                   ),
+                                            errorBubbleHistoryIdx === idx &&
+                                                (isAssistant
+                                                    ? 'border-red-400/40 shadow-[0_0_0_1px_rgba(248,113,113,0.14)] dark:border-red-500/35'
+                                                    : 'ring-1 ring-red-400/35 ring-offset-2 ring-offset-background dark:ring-red-500/30'),
                                         )}
                                     >
                                         {isEditingThis && editContext ? (
@@ -824,31 +943,6 @@ export function ChatbotRenderer({
                                 <Spinner className="size-3.5" />
                                 {advancing ? 'A avançar para a próxima etapa…' : 'A processar…'}
                             </div>
-                        </div>
-                    ) : null}
-
-                    {chatError ? (
-                        <div
-                            className="mt-4 space-y-2 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-                            role="alert"
-                        >
-                            <p>{chatError}</p>
-                            {ready ? (
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-8 border-destructive/40 text-destructive hover:bg-destructive/15"
-                                    disabled={advancing}
-                                    onClick={() => {
-                                        autoSubmitLatchRef.current = false;
-                                        setChatError(null);
-                                    }}
-                                >
-                                    {advancing ? <Spinner className="size-3.5" /> : null}
-                                    Tentar novamente
-                                </Button>
-                            ) : null}
                         </div>
                     ) : null}
                 </div>

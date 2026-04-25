@@ -3,7 +3,8 @@ import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import type { ComponentType } from 'react';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Toaster, toast } from 'sonner';
+import { toast } from 'sonner';
+import { AppToaster } from '@/components/app-toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { initializeTheme } from '@/hooks/use-appearance';
 import '../css/app.css';
@@ -49,7 +50,7 @@ void createInertiaApp({
             <StrictMode>
                 <TooltipProvider delayDuration={0}>
                     <App {...props} />
-                    <Toaster richColors position="top-right" />
+                    <AppToaster />
                 </TooltipProvider>
             </StrictMode>,
         );
