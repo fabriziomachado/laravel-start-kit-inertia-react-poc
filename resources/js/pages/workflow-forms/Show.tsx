@@ -1,9 +1,15 @@
 import { Head, router, useForm, usePage, type InertiaFormProps } from '@inertiajs/react';
 import { Clock, ListTree, MessageSquare, ScrollText, Sparkles, type LucideIcon } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useDefaultLayout } from 'react-resizable-panels';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import type { SharedData } from '@/types/page';
+import {
+    ResizableHandle,
+    ResizablePanel,
+    ResizablePanelGroup,
+} from '@/components/ui/resizable';
 import { Separator } from '@/components/ui/separator';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import AppLayout from '@/layouts/app-layout';
@@ -24,6 +30,35 @@ import type {
     TimelineHeadingRow,
     TimelineStepRow,
 } from './types';
+
+const MIN_PROGRESS_PANEL_PX = 280;
+
+const MAX_PROGRESS_PANEL_PX = 720;
+
+const ssrSafeLocalStorage = {
+    getItem: (key: string): string | null => {
+        if (typeof window === 'undefined') {
+            return null;
+        }
+
+        try {
+            return window.localStorage.getItem(key);
+        } catch {
+            return null;
+        }
+    },
+    setItem: (key: string, value: string): void => {
+        if (typeof window === 'undefined') {
+            return;
+        }
+
+        try {
+            window.localStorage.setItem(key, value);
+        } catch {
+            /* ignore */
+        }
+    },
+} as const;
 
 const PROGRESS_SIDE_TABS: {
     id: ProgressSideTabId;
@@ -286,7 +321,7 @@ function ProgressPanel({
         <aside
             className={cn(
                 'flex h-full min-h-0 w-full min-w-0 shrink-0 flex-col border-t border-border bg-background',
-                'lg:max-w-none lg:flex-row lg:border-t-0',
+                'lg:max-w-none lg:flex-row lg:border-t-0 lg:border-l lg:border-border',
             )}
             aria-labelledby="workflow-progress-heading"
         >
@@ -747,6 +782,31 @@ function WorkflowFormShowInner({
         setRenderer(preferences.workflow_form_renderer);
     }, [preferences.workflow_form_renderer, activeToken]);
 
+    const [lgUp, setLgUp] = useState(
+        () =>
+            typeof window !== 'undefined' &&
+            window.matchMedia('(min-width: 1024px)').matches,
+    );
+
+    useEffect(() => {
+        const mq = window.matchMedia('(min-width: 1024px)');
+        const fn = () => {
+            setLgUp(mq.matches);
+        };
+        fn();
+        mq.addEventListener('change', fn);
+
+        return () => {
+            mq.removeEventListener('change', fn);
+        };
+    }, []);
+
+    const layoutPersistence = useDefaultLayout({
+        id: 'workflow-form-resize',
+        panelIds: ['workflow-form', 'workflow-progress'],
+        storage: ssrSafeLocalStorage,
+    });
+
     const handleChatDraftUpdate = useCallback(
         (payload: { messages: ChatMessage[]; draftValues: Record<string, unknown> }) => {
             // Substituir só o bloco da etapa atual no cumulativo (o API devolve o segmento).
@@ -883,24 +943,59 @@ function WorkflowFormShowInner({
         </div>
     );
 
+    const progressPanel = (
+        <ProgressPanel
+            progress={activeProgress}
+            run_id={activeRunId}
+            formToken={activeToken}
+            copilotAvailable={workflow_form_copilot_available}
+        />
+    );
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={activeStep.title} />
             {/*
-              Um único pai para o formulário + andamento (flex responsivo). Evitar trocar
-              ResizablePanel vs div ao cruzar `lg:` — isso desmontava o ChatbotRenderer e
-              reinicializava o histórico só com o segmento da etapa (conversa “perdida”).
+              Em viewport `lg+`, formulário e andamento em painéis redimensionáveis com
+              layout persistido. Abaixo de `lg`, colunas empilhadas; ao cruzar o breakpoint
+              a árvore muda (grupo vs stack), mas wizard + chat permanecem montados no pai
+              com histórico em `activeConversation`.
             */}
-            <div className="flex min-h-0 flex-1 flex-col lg:max-h-[calc(100svh-4rem-var(--impersonation-banner-offset,0px))] lg:flex-row lg:min-h-0">
-                <div className="flex min-h-0 min-w-0 flex-1 flex-col">{primaryColumn}</div>
-                <aside className="flex min-h-0 w-full shrink-0 flex-col border-t border-border bg-background lg:max-h-none lg:max-w-[720px] lg:min-w-[280px] lg:w-[min(38vw,720px)] lg:border-t-0 lg:border-l">
-                    <ProgressPanel
-                        progress={activeProgress}
-                        run_id={activeRunId}
-                        formToken={activeToken}
-                        copilotAvailable={workflow_form_copilot_available}
-                    />
-                </aside>
+            <div className="flex min-h-0 flex-1 flex-col lg:max-h-[calc(100svh-4rem-var(--impersonation-banner-offset,0px))] lg:min-h-0">
+                {lgUp ? (
+                    <ResizablePanelGroup
+                        orientation="horizontal"
+                        className="flex min-h-0 flex-1"
+                        defaultLayout={layoutPersistence.defaultLayout}
+                        onLayoutChanged={layoutPersistence.onLayoutChanged}
+                    >
+                        <ResizablePanel
+                            id="workflow-form"
+                            className="flex min-h-0 min-w-0"
+                            minSize="24%"
+                        >
+                            {primaryColumn}
+                        </ResizablePanel>
+                        <ResizableHandle
+                            withHandle
+                            className="bg-border/60"
+                            aria-label="Redimensionar painel de andamento"
+                        />
+                        <ResizablePanel
+                            id="workflow-progress"
+                            className="flex min-h-0 min-w-0"
+                            minSize={`${MIN_PROGRESS_PANEL_PX}px`}
+                            maxSize={`${MAX_PROGRESS_PANEL_PX}px`}
+                        >
+                            {progressPanel}
+                        </ResizablePanel>
+                    </ResizablePanelGroup>
+                ) : (
+                    <div className="flex min-h-0 flex-1 flex-col">
+                        {primaryColumn}
+                        {progressPanel}
+                    </div>
+                )}
             </div>
         </AppLayout>
     );
