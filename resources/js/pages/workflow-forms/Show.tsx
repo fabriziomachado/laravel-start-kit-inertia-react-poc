@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useDefaultLayout } from 'react-resizable-panels';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import type { SharedData } from '@/types/page';
 import {
     ResizableHandle,
@@ -11,6 +12,7 @@ import {
     ResizablePanelGroup,
 } from '@/components/ui/resizable';
 import { Separator } from '@/components/ui/separator';
+import { Drawer, DrawerClose, DrawerContent } from '@/components/ui/drawer';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
@@ -259,6 +261,7 @@ function ProgressPanel({
     copilotAvailable,
     progressTab,
     onProgressTabChange,
+    variant = 'sidebar',
 }: {
     progress: ProgressPayload;
     run_id: number;
@@ -266,11 +269,13 @@ function ProgressPanel({
     copilotAvailable: boolean;
     progressTab: ProgressSideTabId | null;
     onProgressTabChange: (tab: ProgressSideTabId | null) => void;
+    variant?: 'sidebar' | 'drawer';
 }) {
     const [timelineView, setTimelineView] = useState<'complete' | 'compact'>(
         'complete',
     );
     const collapsed = progressTab === null;
+    const inDrawer = variant === 'drawer';
 
     const showTimelineViewToggle = progress.steps.length >= 2;
 
@@ -322,9 +327,11 @@ function ProgressPanel({
     return (
         <aside
             className={cn(
-                collapsed
-                    ? 'flex h-full min-h-0 min-w-0 shrink-0 flex-col border-t border-border bg-background lg:w-[4.5rem] lg:border-t-0 lg:border-l lg:border-border'
-                    : 'flex h-full min-h-0 w-full min-w-0 shrink-0 flex-col border-t border-border bg-background lg:max-w-none lg:flex-row lg:border-t-0 lg:border-l lg:border-border',
+                inDrawer
+                    ? 'flex h-full min-h-0 w-full min-w-0 shrink-0 flex-col bg-background'
+                    : collapsed
+                        ? 'flex h-full min-h-0 min-w-0 shrink-0 flex-col border-t border-border bg-background lg:w-[4.5rem] lg:border-t-0 lg:border-l lg:border-border'
+                        : 'flex h-full min-h-0 w-full min-w-0 shrink-0 flex-col border-t border-border bg-background lg:max-w-none lg:flex-row lg:border-t-0 lg:border-l lg:border-border',
             )}
             aria-label="Painel de andamento"
         >
@@ -673,7 +680,11 @@ function ProgressPanel({
                 className={cn(
                     'flex shrink-0 flex-row items-stretch justify-around gap-0.5 border-t border-border bg-background px-1.5 py-2',
                     'lg:w-[4.5rem] lg:flex-col lg:justify-start lg:gap-1 lg:px-2 lg:py-3',
-                    collapsed ? 'lg:border-l-0 lg:border-t-0' : 'lg:border-t-0 lg:border-l',
+                    inDrawer
+                        ? 'lg:border-0'
+                        : collapsed
+                            ? 'lg:border-l-0 lg:border-t-0'
+                            : 'lg:border-t-0 lg:border-l',
                 )}
             >
                 {PROGRESS_SIDE_TABS.map((tab) => {
@@ -793,25 +804,6 @@ function WorkflowFormShowInner({
         setRenderer(preferences.workflow_form_renderer);
     }, [preferences.workflow_form_renderer, activeToken]);
 
-    const [lgUp, setLgUp] = useState(
-        () =>
-            typeof window !== 'undefined' &&
-            window.matchMedia('(min-width: 1024px)').matches,
-    );
-
-    useEffect(() => {
-        const mq = window.matchMedia('(min-width: 1024px)');
-        const fn = () => {
-            setLgUp(mq.matches);
-        };
-        fn();
-        mq.addEventListener('change', fn);
-
-        return () => {
-            mq.removeEventListener('change', fn);
-        };
-    }, []);
-
     const layoutPersistence = useDefaultLayout({
         id: 'workflow-form-resize',
         panelIds: ['workflow-form', 'workflow-progress'],
@@ -821,6 +813,7 @@ function WorkflowFormShowInner({
     const [progressTab, setProgressTab] = useState<ProgressSideTabId | null>(
         'details',
     );
+    const [progressSheetOpen, setProgressSheetOpen] = useState(false);
 
     const handleChatDraftUpdate = useCallback(
         (payload: { messages: ChatMessage[]; draftValues: Record<string, unknown> }) => {
@@ -962,7 +955,12 @@ function WorkflowFormShowInner({
             formToken={activeToken}
             copilotAvailable={workflow_form_copilot_available}
             progressTab={progressTab}
-            onProgressTabChange={setProgressTab}
+            onProgressTabChange={(tab) => {
+                setProgressTab(tab);
+                if (tab === null) {
+                    setProgressSheetOpen(false);
+                }
+            }}
         />
     );
 
@@ -976,8 +974,8 @@ function WorkflowFormShowInner({
               com histórico em `activeConversation`.
             */}
             <div className="flex min-h-0 flex-1 flex-col lg:max-h-[calc(100svh-4rem-var(--impersonation-banner-offset,0px))] lg:min-h-0">
-                {lgUp ? (
-                    progressTab ? (
+                <div className="hidden min-h-0 flex-1 lg:flex">
+                    {progressTab ? (
                         <ResizablePanelGroup
                             orientation="horizontal"
                             className="flex min-h-0 flex-1"
@@ -1010,13 +1008,77 @@ function WorkflowFormShowInner({
                             {primaryColumn}
                             {progressPanel}
                         </div>
-                    )
-                ) : (
-                    <div className="flex min-h-0 flex-1 flex-col">
-                        {primaryColumn}
-                        {progressPanel}
-                    </div>
-                )}
+                    )}
+                </div>
+
+                <div className="flex min-h-0 flex-1 flex-col lg:hidden">
+                    {primaryColumn}
+                    <Drawer
+                        open={progressSheetOpen}
+                        onOpenChange={(open) => {
+                            setProgressSheetOpen(open);
+                            if (open && progressTab === null) {
+                                setProgressTab('details');
+                            }
+                        }}
+                        dismissible
+                        snapPoints={[0.35, 0.85]}
+                        activeSnapPoint={0.85}
+                    >
+                        <div className="pointer-events-none fixed right-4 bottom-4 z-40 flex items-center gap-2">
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                className="pointer-events-auto gap-2 rounded-full shadow-lg"
+                                onClick={() => {
+                                    setProgressSheetOpen(true);
+                                    if (progressTab === null) {
+                                        setProgressTab('details');
+                                    }
+                                }}
+                            >
+                                <ListTree className="size-4" aria-hidden />
+                                Andamento
+                            </Button>
+                        </div>
+                        <DrawerContent className="h-[85svh] p-0">
+                            <div className="flex h-full min-h-0 flex-col">
+                                <div className="relative shrink-0">
+                                    <div className="mx-auto mt-3 h-1.5 w-16 rounded-full bg-muted-foreground/25" />
+                                    <DrawerClose asChild>
+                                        <button
+                                            type="button"
+                                            className="absolute top-3 right-3 inline-flex size-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                                            aria-label="Fechar"
+                                        >
+                                            <span className="text-xl leading-none">
+                                                ×
+                                            </span>
+                                        </button>
+                                    </DrawerClose>
+                                </div>
+                                <div className="min-h-0 flex-1">
+                                    <ProgressPanel
+                                        progress={activeProgress}
+                                        run_id={activeRunId}
+                                        formToken={activeToken}
+                                        copilotAvailable={
+                                            workflow_form_copilot_available
+                                        }
+                                        progressTab={progressTab}
+                                        onProgressTabChange={(tab) => {
+                                            setProgressTab(tab);
+                                            if (tab === null) {
+                                                setProgressSheetOpen(false);
+                                            }
+                                        }}
+                                        variant="drawer"
+                                    />
+                                </div>
+                            </div>
+                        </DrawerContent>
+                    </Drawer>
+                </div>
             </div>
         </AppLayout>
     );

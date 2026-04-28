@@ -5,6 +5,10 @@ import laravel from 'laravel-vite-plugin';
 import {defineConfig} from 'vite-plus';
 
 export default defineConfig({
+    resolve: {
+        // Evitar múltiplas cópias do React (ex.: libs com hooks como Vaul)
+        dedupe: ['react', 'react-dom'],
+    },
     lint: {
         options: {
             typeAware: true,
