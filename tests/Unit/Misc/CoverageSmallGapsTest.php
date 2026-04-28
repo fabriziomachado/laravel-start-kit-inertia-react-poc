@@ -25,6 +25,7 @@ it('cobre gaps pequenos (policies/models/providers/controllers)', function (): v
         'snapshot' => ['a' => 1],
     ]);
     expect($audit->casts())->toBeArray();
+    expect($audit->workflow())->toBeInstanceOf(\Illuminate\Database\Eloquent\Relations\BelongsTo::class);
 
     $conv = WorkflowFormConversation::query()->create([
         'workflow_run_id' => \Aftandilmmd\WorkflowAutomation\Models\WorkflowRun::factory()->create()->id,

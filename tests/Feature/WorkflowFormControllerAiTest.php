@@ -8,6 +8,8 @@ use App\Models\User;
 use App\Services\Workflow\AiCopilotService;
 use App\Services\Workflow\AiFieldExtractor;
 use Database\Seeders\WorkflowFormWizardExampleSeeder;
+use Illuminate\Support\Facades\DB;
+use Aftandilmmd\WorkflowAutomation\Services\WorkflowService;
 use Illuminate\Support\Facades\Http;
 
 /**
@@ -175,5 +177,112 @@ it('preferences aceita json e devolve preferências', function (): void {
         ->patchJson(route('workflow-forms.preferences'), ['workflow_form_renderer' => 'chatbot'])
         ->assertOk()
         ->assertJsonPath('preferences.workflow_form_renderer', 'chatbot');
+});
+
+it('preferences (html) percorre caminho com existing JSON e redireciona back', function (): void {
+    $user = User::factory()->create();
+
+    DB::table((new User)->getTable())
+        ->where('id', $user->id)
+        ->update(['preferences' => json_encode(['workflow_form_renderer' => 'wizard', 'x' => 1], JSON_THROW_ON_ERROR)]);
+
+    $this->actingAs($user)
+        ->from('/settings/appearance')
+        ->patch(route('workflow-forms.preferences'), ['workflow_form_renderer' => 'chatbot'])
+        ->assertRedirect();
+});
+
+it('submit-chat devolve done=true quando última etapa é submetida e o fluxo conclui', function (): void {
+    $user = User::factory()->create();
+
+    test()->seed(WorkflowFormWizardExampleSeeder::class);
+    $workflow = Workflow::query()->where('name', WorkflowFormWizardExampleSeeder::WORKFLOW_NAME)->firstOrFail();
+
+    $run = app(GraphExecutor::class)->execute($workflow, \App\Flows\WorkflowStarterPayload::forUser($user));
+    $service = app(WorkflowService::class);
+
+    // Passo1
+    $token1 = (string) $run->nodeRuns()->orderByDesc('id')->firstOrFail()->output['main'][0]['resume_token'];
+    $run = $service->resume($run->fresh(), $token1, ['name' => 'Ana', 'email' => 'ana@example.com']);
+
+    // Ingresso
+    $token2 = (string) $run->fresh()->nodeRuns()->orderByDesc('id')->firstOrFail()->output['main'][0]['resume_token'];
+    $run = $service->resume($run->fresh(), $token2, ['forma_ingresso' => 'enem']);
+
+    // Passo2 (último form_step)
+    $token3 = (string) $run->fresh()->nodeRuns()->orderByDesc('id')->firstOrFail()->output['main'][0]['resume_token'];
+
+    $this->actingAs($user)
+        ->postJson(route('workflow-forms.submit-chat', ['token' => $token3]), [
+            'reason' => 'porque sim',
+            'accept_terms' => true,
+        ])
+        ->assertOk()
+        ->assertJsonPath('done', true)
+        ->assertJsonPath('redirect_url', route('flows.index'));
+});
+
+it('edit retorna 404 para token inválido', function (): void {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->postJson(route('workflow-forms.chat.edit', ['token' => 'token-invalido']), [
+            'field_key' => 'name',
+            'content' => 'Ana',
+        ])
+        ->assertNotFound();
+});
+
+it('edit edita resposta numa conversa de etapa anterior e devolve cumulative_messages e draft_values', function (): void {
+    $user = User::factory()->create();
+
+    test()->seed(WorkflowFormWizardExampleSeeder::class);
+    $workflow = Workflow::query()->where('name', WorkflowFormWizardExampleSeeder::WORKFLOW_NAME)->firstOrFail();
+    $run = app(GraphExecutor::class)->execute($workflow, \App\Flows\WorkflowStarterPayload::forUser($user));
+    $service = app(WorkflowService::class);
+
+    // Avança até Passo2 (para o token atual do edit)
+    $token1 = (string) $run->nodeRuns()->orderByDesc('id')->firstOrFail()->output['main'][0]['resume_token'];
+    $run = $service->resume($run->fresh(), $token1, ['name' => 'Ana', 'email' => 'ana@example.com']);
+    $token2 = (string) $run->fresh()->nodeRuns()->orderByDesc('id')->firstOrFail()->output['main'][0]['resume_token'];
+    $run = $service->resume($run->fresh(), $token2, ['forma_ingresso' => 'enem']);
+
+    $currentNodeRun = $run->fresh()->nodeRuns()->orderByDesc('id')->firstOrFail(); // Passo2
+    $currentToken = (string) $currentNodeRun->output['main'][0]['resume_token'];
+
+    // Descobre o nodeRun Completed de Passo1 (para ser o alvo da edição)
+    $step1Run = $run->fresh()->nodeRuns()
+        ->where('status', \Aftandilmmd\WorkflowAutomation\Enums\NodeRunStatus::Completed)
+        ->get()
+        ->first(static fn (\Aftandilmmd\WorkflowAutomation\Models\WorkflowNodeRun $nr): bool => ($nr->output['main'][0]['title'] ?? null) === 'Dados pessoais')
+        ?? $run->fresh()->nodeRuns()->orderBy('id')->firstOrFail();
+
+    \App\Models\WorkflowFormConversation::query()->create([
+        'workflow_run_id' => $run->id,
+        'workflow_node_run_id' => $currentNodeRun->id,
+        'messages' => [
+            ['role' => 'assistant', 'content' => 'Motivo?', 'meta' => ['expecting_field' => 'reason', 'at' => now()->toIso8601String()]],
+            ['role' => 'user', 'content' => 'x', 'meta' => ['expecting_field' => 'reason', 'at' => now()->toIso8601String(), 'workflow_node_run_id' => (int) $currentNodeRun->id]],
+        ],
+    ]);
+
+    \App\Models\WorkflowFormConversation::query()->create([
+        'workflow_run_id' => $run->id,
+        'workflow_node_run_id' => $step1Run->id,
+        'messages' => [
+            ['role' => 'assistant', 'content' => 'Nome?', 'meta' => ['expecting_field' => 'name', 'at' => now()->toIso8601String()]],
+            ['role' => 'user', 'content' => 'Ana', 'meta' => ['expecting_field' => 'name', 'at' => now()->toIso8601String(), 'workflow_node_run_id' => (int) $step1Run->id]],
+        ],
+    ]);
+
+    $this->actingAs($user)
+        ->postJson(route('workflow-forms.chat.edit', ['token' => $currentToken]), [
+            'field_key' => 'name',
+            'content' => 'Ana Maria',
+            'workflow_node_run_id' => (int) $step1Run->id,
+        ])
+        ->assertOk()
+        ->assertJsonPath('draft_values.name', 'Ana Maria')
+        ->assertJsonPath('ready_for_submit', false);
 });
 
