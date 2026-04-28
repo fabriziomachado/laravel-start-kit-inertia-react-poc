@@ -29,3 +29,8 @@ Homestead.yaml
 
 # Capturas geradas por testes Dusk em falha (não versionar)
 /tests/Browser/Screenshots/
+
+# Relatórios de cobertura de código (Pest/PHPUnit)
+/storage/coverage-html/
+/coverage/
+/.coverage/
