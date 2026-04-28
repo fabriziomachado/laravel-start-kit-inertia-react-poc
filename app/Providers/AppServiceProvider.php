@@ -6,6 +6,7 @@ namespace App\Providers;
 
 use Aftandilmmd\WorkflowAutomation\Models\Workflow;
 use Aftandilmmd\WorkflowAutomation\Models\WorkflowRun;
+use App\Models\User;
 use App\Observers\WorkflowDefinitionObserver;
 use App\Policies\WorkflowPolicy;
 use App\Policies\WorkflowRunPolicy;
@@ -32,7 +33,7 @@ final class AppServiceProvider extends ServiceProvider
         Gate::policy(Workflow::class, WorkflowPolicy::class);
         Gate::policy(WorkflowRun::class, WorkflowRunPolicy::class);
 
-        Gate::define('viewWorkflowAutomation', function ($user = null): bool {
+        Gate::define('viewWorkflowAutomation', function (?User $user = null): bool {
             return (bool) ($user?->is_admin ?? false);
         });
 

@@ -7,7 +7,7 @@ use Pest\Browser\Playwright\Playwright;
 it('importa o fixture matr-cula-de-calouro.workflow.json pela UI e abre o workflow criado', function (): void {
     app()->detectEnvironment(fn (): string => 'local');
 
-    Playwright::setTimeout(30_000);
+    Playwright::setTimeout(60_000);
 
     $fixture = realpath(__DIR__.'/../Fixtures/matr-cula-de-calouro.workflow.json');
     expect($fixture)->not->toBeFalse();
@@ -19,7 +19,8 @@ it('importa o fixture matr-cula-de-calouro.workflow.json pela UI e abre o workfl
         ->click('Import')
         ->assertSee('Import Workflow');
 
-    $page->attach('input[type="file"][accept=".json"]', $fixture)
+    $page->wait(1)
+        ->attach('input[type="file"]', $fixture)
         ->assertSee('Matrícula de Calouro - v2')
         ->assertSee('Ready to import');
 

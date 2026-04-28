@@ -5,13 +5,14 @@ declare(strict_types=1);
 namespace App\Mail;
 
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Queue\SerializesModels;
 use Symfony\Component\Mime\Email;
 use Symfony\Component\Mime\Part\Multipart\AlternativePart;
 use Symfony\Component\Mime\Part\TextPart;
 
-final class WorkflowApprovalAmpMail extends Mailable
+final class WorkflowApprovalAmpMail extends Mailable implements ShouldQueue
 {
     use Queueable, SerializesModels;
 

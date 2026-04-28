@@ -31,8 +31,7 @@ final class WorkflowEmailApprovalDemoSeeder extends Seeder
                 });
             });
 
-        $to = (string) (env('WORKFLOW_EMAIL_APPROVAL_TO')
-            ?: config('mail.from.address', 'test@example.com'));
+        $to = (string) config('mail.from.address', 'test@example.com');
 
         $workflow = Workflow::query()->create([
             'name' => self::WORKFLOW_NAME,

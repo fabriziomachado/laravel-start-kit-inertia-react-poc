@@ -21,7 +21,7 @@ it('executa o fluxo demo até Waiting e envia WorkflowApprovalAmpMail', function
 
     expect($run->fresh()->status)->toBe(RunStatus::Waiting);
 
-    Mail::assertSent(WorkflowApprovalAmpMail::class, function (WorkflowApprovalAmpMail $mail): bool {
+    Mail::assertQueued(WorkflowApprovalAmpMail::class, function (WorkflowApprovalAmpMail $mail): bool {
         return str_contains($mail->subjectLine, 'Aprovação');
     });
 });
